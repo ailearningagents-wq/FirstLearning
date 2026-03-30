@@ -1,5 +1,18 @@
 # ASP.NET Core MVC → Angular + Web API Migration Plan
 
+## Workspace Modification Permission
+
+Before starting any migration work, ask the user:
+
+**"This migration will create, modify, and reorganize files across your Angular and Web API projects. Do you grant permission to modify your workspace for the entire migration operation? (yes/no)"**
+
+- If **yes** — Proceed with all file creation, modification, and reorganization steps throughout the entire migration without asking for permission again at each individual step.
+- If **no** — Ask for explicit confirmation before each file creation, modification, or deletion during the migration process.
+
+Do not proceed with any migration phases until this permission is granted or denied.
+
+---
+
 ## Project Paths
 
 Ask the user for each path one at a time. Do not proceed to the next question until the current path is provided and validated:
