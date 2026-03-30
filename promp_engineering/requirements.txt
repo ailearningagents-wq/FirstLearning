@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────
+# Core LLM API clients
+# ─────────────────────────────────────────────────
+openai>=1.30.0               # OpenAI Python SDK (GPT-4o, GPT-4o-mini, etc.)
+anthropic>=0.25.0            # Anthropic Claude SDK (optional, swap-in provider)
+tiktoken>=0.7.0              # Fast tokenizer for OpenAI models (token counting)
+
+# ─────────────────────────────────────────────────
+# LangChain ecosystem
+# ─────────────────────────────────────────────────
+langchain>=0.2.0             # Core chains, prompts, agents
+langchain-openai>=0.1.0      # LangChain ↔ OpenAI integration
+langchain-community>=0.2.0   # Community integrations (loaders, stores, etc.)
+langchain-text-splitters>=0.2.0  # Text chunking utilities
+
+# ─────────────────────────────────────────────────
+# LlamaIndex (document indexing & RAG)
+# ─────────────────────────────────────────────────
+llama-index>=0.10.0          # Core LlamaIndex library
+llama-index-llms-openai>=0.1.0  # LlamaIndex OpenAI LLM integration
+llama-index-embeddings-openai>=0.1.0  # LlamaIndex OpenAI embeddings
+
+# ─────────────────────────────────────────────────
+# DSPy (programmatic prompt optimization)
+# ─────────────────────────────────────────────────
+dspy-ai>=2.4.0               # DSPy framework for prompt/program optimization
+
+# ─────────────────────────────────────────────────
+# Guardrails AI (output validation)
+# ─────────────────────────────────────────────────
+guardrails-ai>=0.4.0         # Structural output validation and correction
+
+# ─────────────────────────────────────────────────
+# Evaluation & metrics
+# ─────────────────────────────────────────────────
+rouge-score>=0.1.2           # ROUGE metrics for summarization evaluation
+nltk>=3.8.1                  # BLEU score, tokenization, NLP utilities
+sentence-transformers>=3.0.0 # Semantic similarity embeddings
+scikit-learn>=1.4.0          # Cosine similarity, classification metrics
+numpy>=1.26.0                # Numerical operations
+
+# ─────────────────────────────────────────────────
+# Data handling & document processing
+# ─────────────────────────────────────────────────
+pypdf>=4.2.0                 # PDF loading for RAG/document QA
+python-docx>=1.1.0           # DOCX file parsing
+pandas>=2.2.0                # Tabular data manipulation
+faiss-cpu>=1.8.0             # Vector similarity search (CPU version)
+
+# ─────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────
+python-dotenv>=1.0.1         # Load .env files into os.environ
+rich>=13.7.0                 # Beautiful terminal output (tables, panels, etc.)
+tenacity>=8.3.0              # Retry logic with exponential backoff
+pydantic>=2.7.0              # Data validation / structured output models
+requests>=2.31.0             # HTTP requests (used in ReAct tool examples)
+colorama>=0.4.6              # Cross-platform colored terminal text
+
+# ─────────────────────────────────────────────────
+# PII detection (Module 07)
+# ─────────────────────────────────────────────────
+presidio-analyzer>=2.2.354   # Microsoft Presidio PII detection
+presidio-anonymizer>=2.2.354 # PII anonymization/redaction
+spacy>=3.7.0                 # NLP backend for Presidio
+# After install, run: python -m spacy download en_core_web_sm
+
+# ─────────────────────────────────────────────────
+# Logging & observability (Module 06)
+# ─────────────────────────────────────────────────
+structlog>=24.1.0            # Structured logging

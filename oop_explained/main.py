@@ -37,6 +37,8 @@ Project Structure:
   ├── 26_llm_apis/                → OpenAI/Anthropic API patterns (mock)
   ├── 27_rag_embeddings/          → TF-IDF, cosine sim, VectorStore, RAG
   ├── 28_agentic_ai/              → ReAct, tool use, multi-agent patterns
+  ── REAL-TIME PROJECTS ───────────────────────────────────────────────
+  ├── 29_school_management_system/ → Python + MySQL CRUD, OOP, reports
   └── main.py                     ← YOU ARE HERE
 
 Usage:
@@ -45,6 +47,7 @@ Usage:
   python3 main.py 9 10 11                → run decorator/generator/comprehension
   python3 main.py 19 20 21               → run numpy/pandas/visualization
   python3 main.py 26 27 28               → run LLM APIs / RAG / Agentic AI
+  python3 main.py 29                     → run School Management System
 """
 
 import sys
@@ -89,14 +92,16 @@ TOPICS = [
     (26, "26_llm_apis",           "llm_apis",            "LLM APIs (OpenAI / Anthropic patterns)"),
     (27, "27_rag_embeddings",     "rag_embeddings",      "RAG & Vector Embeddings"),
     (28, "28_agentic_ai",         "agentic_ai",          "Agentic AI (ReAct, Tools, Multi-Agent)"),
+    # ── Real-Time Projects ────────────────────────────────────────────
+    (29, "29_school_management_system", "school_management",   "Project: School Management System (MySQL)"),
 ]
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 BANNER = """
 ╔══════════════════════════════════════════════════════════════╗
-║          PYTHON — COMPLETE CONCEPTS GUIDE (28 Topics)        ║
-║   OOP · Python · NumPy · ML · LLMs · RAG · Agentic AI        ║
+║          PYTHON — COMPLETE CONCEPTS GUIDE (29 Topics)        ║
+║   OOP · Python · NumPy · ML · LLMs · RAG · Projects          ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
@@ -167,7 +172,7 @@ def main():
     print("  ALL TOPICS COMPLETE!")
     print("═" * 64)
     print("""
-  QUICK REFERENCE — ALL 28 TOPICS:
+  QUICK REFERENCE — ALL 29 TOPICS:
   ─────────────────────────────────────────────────────────────
   ── OOP ──────────────────────────────────────────────────────
    1  Classes & Objects     Blueprint → instance, __init__
@@ -200,6 +205,8 @@ def main():
   26  LLM APIs              OpenAI/Anthropic patterns, tool calling
   27  RAG & Embeddings      TF-IDF, cosine sim, VectorStore, hybrid
   28  Agentic AI            ReAct, tools, memory, multi-agent
+  ── REAL-TIME PROJECTS ───────────────────────────────────────
+  29  School Mgmt System  Python + MySQL, OOP, CRUD, reports
   ─────────────────────────────────────────────────────────────
 
   Run individual topics:
@@ -208,7 +215,8 @@ def main():
     python3 main.py 9 10 11    → Decorators, Generators, Comprehensions
     python3 main.py 19 20 21   → NumPy, Pandas, Visualization
     python3 main.py 26 27 28   → LLM APIs, RAG, Agentic AI
-    python3 main.py            → All 28 topics
+    python3 main.py 29         → School Management System (MySQL)
+    python3 main.py            → All 29 topics
 """)
 
 
