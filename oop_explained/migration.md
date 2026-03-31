@@ -1,10 +1,10 @@
-# ASP.NET Core MVC → Angular + Web API Migration Plan
+# ASP.NET Core MVC → Angular / React + Web API Migration Plan
 
 ## Workspace Modification Permission
 
 Before starting any migration work, ask the user:
 
-**"This migration will create, modify, and reorganize files across your Angular and Web API projects. Do you grant permission to modify your workspace for the entire migration operation? (yes/no)"**
+**"This migration will create, modify, and reorganize files across your frontend and Web API projects. Do you grant permission to modify your workspace for the entire migration operation? (yes/no)"**
 
 - If **yes** — Proceed with all file creation, modification, and reorganization steps throughout the entire migration without asking for permission again at each individual step.
 - If **no** — Ask for explicit confirmation before each file creation, modification, or deletion during the migration process.
@@ -13,33 +13,88 @@ Do not proceed with any migration phases until this permission is granted or den
 
 ---
 
+## Frontend Framework Selection
+
+Ask the user:
+
+**"Which frontend framework are you migrating to? (Angular / React)"**
+
+- Store the answer as `[SELECTED_FRAMEWORK]` — all `[ANGULAR ONLY]` or `[REACT ONLY]` sections below apply based on this choice.
+- Skip all sections marked `[ANGULAR ONLY]` if React was selected.
+- Skip all sections marked `[REACT ONLY]` if Angular was selected.
+- Sections with no tag apply to both frameworks.
+
+Do not proceed until a valid choice (Angular or React) is made.
+
+---
+
 ## Project Paths
 
 Ask the user for each path one at a time. Do not proceed to the next question until the current path is provided and validated:
 
 1. First, ask: **"Please provide the full path to the Source ASP.NET Core MVC project:"** — Wait for response, validate the path exists and contains a `.csproj` file.
-2. Then ask: **"Please provide the full path to the Destination Angular project:"** — Wait for response, validate the path exists and contains a `package.json` and `angular.json`.
+
+2. Then ask for the destination frontend project path based on the selected framework:
+
+   > **[ANGULAR ONLY]** — "Please provide the full path to the Destination Angular project:" — Validate the path exists and contains a `package.json` and `angular.json`.
+
+   > **[REACT ONLY]** — "Please provide the full path to the Destination React project:" — Validate the path exists and contains a `package.json` and either `vite.config.ts`, `vite.config.js`, or `react-scripts` in dependencies.
+
 3. Then ask: **"Please provide the full path to the Destination C# Web API project:"** — Wait for response, validate the path exists and contains a `.csproj` file.
 
 Do not proceed with any migration until all three paths are collected and validated.
 
-4. Then ask: **"Does the source MVC application use Kendo UI? (yes/no):"** — If yes, use Kendo Angular components for UI migration. If no, skip Phase 4 and use standard HTML/Angular Material controls based on what's installed in the destination Angular project.
+4. Then ask: **"Does the source MVC application use Kendo UI? (yes/no):"**
+
+   - If **yes** — ask: **"Which version of Kendo UI is used in the source project? (e.g., 2023.1, 2024.2 — check `bower.json`, `package.json`, or the Kendo CDN script version):"**
+     - Use the provided version as a reference for feature parity when selecting equivalent Kendo components in the destination project.
+
+   > **[ANGULAR ONLY] — If yes:**
+   > - Check whether `@progress/kendo-angular-*` packages already exist in the destination project's `package.json`.
+   > - **If already installed** — use the installed version as-is. Do **not** run any install commands.
+   > - **If not installed** — install only the specific Kendo Angular packages needed for the controls being migrated (e.g., `@progress/kendo-angular-grid`, `@progress/kendo-angular-dropdowns`). Do not install the entire Kendo suite.
+   > - Proceed with Phase 4 using Kendo Angular components.
+
+   > **[ANGULAR ONLY] — If no:** Skip Phase 4 and use standard HTML/Angular Material controls based on what's installed in the destination Angular project.
+
+   > **[REACT ONLY] — If yes:**
+   > - Check whether `@progress/kendo-react-*` packages already exist in the destination project's `package.json`.
+   > - **If already installed** — use the installed version as-is. Do **not** run any install commands.
+   > - **If not installed** — install only the specific Kendo React packages needed for the controls being migrated (e.g., `@progress/kendo-react-grid`, `@progress/kendo-react-dropdowns`). Do not install the entire Kendo suite.
+   > - Proceed with Phase 4 using Kendo React components.
+
+   > **[REACT ONLY] — If no:** Skip Phase 4 and use standard HTML/React controls (Material UI, Ant Design, etc.) based on what's installed in the destination React project.
 
 ## Overview
 
-Migrate monolithic MVC app into: **Angular** (existing project, UI) + **C# Web API** (existing project, backend). Packages, CORS, auth already configured in both projects.
+Migrate monolithic MVC app into: **[SELECTED_FRAMEWORK]** (existing project, UI) + **C# Web API** (existing project, backend). Packages, CORS, auth already configured in both projects.
 
 ### Pre-Migration: Analyze Destination Projects First
 
 Before generating any code, **analyze both destination projects** to understand:
 
-**Angular Project:**
-- Existing folder structure, module organization (standalone vs NgModule), routing setup
-- Installed packages (`package.json`) — identify Kendo Angular, Angular Material, Bootstrap, ngx-toastr, etc.
-- Existing shared/core modules, interceptors, guards, services already in place
-- Coding conventions — naming patterns, file organization, state management approach
-- Angular version and syntax style (e.g., control flow `@if`/`@for` vs `*ngIf`/`*ngFor`)
-- Existing environment config files and API URL setup
+---
+
+> **[ANGULAR ONLY] — Angular Project Analysis:**
+> - Existing folder structure, module organization (standalone vs NgModule), routing setup
+> - Installed packages (`package.json`) — identify Kendo Angular, Angular Material, Bootstrap, ngx-toastr, etc.
+> - Existing shared/core modules, interceptors, guards, services already in place
+> - Coding conventions — naming patterns, file organization, state management approach
+> - Angular version and syntax style (e.g., control flow `@if`/`@for` vs `*ngIf`/`*ngFor`)
+> - Existing environment config files and API URL setup
+
+---
+
+> **[REACT ONLY] — React Project Analysis:**
+> - Existing folder structure, component organization (pages, components, hooks, etc.)
+> - Installed packages (`package.json`) — identify Kendo React, MUI, Ant Design, React Query, Zustand, Redux, axios, react-hook-form, yup/zod, etc.
+> - Existing shared components, custom hooks, context providers, route guards already in place
+> - Coding conventions — naming patterns, TypeScript usage, file organization, state management approach
+> - React version and syntax style (class vs functional components; hooks usage)
+> - Existing environment config files (`VITE_*` / `REACT_APP_*`) and API base URL setup
+> - Bundler in use: Vite, Create React App (CRA), or custom webpack
+
+---
 
 **Web API Project:**
 - Existing folder structure, namespace conventions, project layers
@@ -53,18 +108,21 @@ Before generating any code, **analyze both destination projects** to understand:
 
 ### Migration Must Include
 
-- **All server-side validations** — Data annotations, FluentValidation rules, custom `IValidatableObject` implementations, action filter validations → migrate to both API DTOs (server-side) and Angular Reactive Forms (client-side)
-- **All client-side validations** — jQuery Unobtrusive Validation, custom JS validators → Angular form validators (built-in + custom `ValidatorFn` / `AsyncValidatorFn`)
+- **All server-side validations** — Data annotations, FluentValidation rules, custom `IValidatableObject` implementations, action filter validations → migrate to API DTOs (server-side)
+- **All client-side validations:**
+  > **[ANGULAR ONLY]** jQuery Unobtrusive Validation, custom JS validators → Angular Reactive Forms validators (built-in + custom `ValidatorFn` / `AsyncValidatorFn`)
+  > **[REACT ONLY]** jQuery Unobtrusive Validation, custom JS validators → `react-hook-form` validators with `yup` or `zod` schema (or built-in validation rules matching what's installed)
 - **AutoMapper profiles** — All entity↔ViewModel mappings → entity↔DTO AutoMapper profiles in Web API
 - **Custom middleware** — Exception handling, request logging, tenant resolution, rate limiting, etc. → Web API middleware pipeline
 - **Custom action filters** — Authorization filters, validation filters, audit filters → Web API `IActionFilter` / `IAsyncActionFilter` / middleware
 - **Custom exception filters** — `IExceptionFilter` implementations → Web API exception handling middleware or filters
 - **Custom result filters** — `IResultFilter` implementations → Web API equivalent filters
 - **Custom model binders** — `IModelBinder` implementations → Web API custom model binders or `[FromBody]`/`[FromQuery]` with DTOs
-- **Custom tag helpers** — Server-side tag helpers → Angular directives or Kendo Angular components
-- **Custom HTML helpers** — `@Html.CustomHelper()` → Angular pipes, directives, or components
-- **Custom validation attributes** — `[CustomValidation]`, `ValidationAttribute` subclasses → API: custom validation attributes on DTOs + Angular: custom validator functions
-- **Business rule validations** — Service-layer validations, domain validations → preserve in Web API services, surface errors via `ProblemDetails` to Angular
+- **Custom tag helpers** and **custom HTML helpers:**
+  > **[ANGULAR ONLY]** → Angular directives, pipes, or Kendo Angular components
+  > **[REACT ONLY]** → React components, custom hooks, or utility functions
+- **Custom validation attributes** — `[CustomValidation]`, `ValidationAttribute` subclasses → API: custom validation attributes on DTOs + frontend: custom validator functions
+- **Business rule validations** — Service-layer validations, domain validations → preserve in Web API services, surface errors via `ProblemDetails` to the frontend
 - **All DbContext classes & EF Core configuration** — Migrate every DbContext, entity configurations, seeding, and migrations into the destination Web API project following its existing data layer structure
 
 ---
@@ -74,6 +132,8 @@ Before generating any code, **analyze both destination projects** to understand:
 Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layouts, partials, tag helpers), View Models, EF Core entities/DbContext, Services, Static assets, Third-party libs (Kendo etc.), Middleware/Filters, Custom Validations, AutoMapper profiles, SignalR hubs, Background jobs.
 
 **Library Mapping:**
+
+> **[ANGULAR ONLY]**
 
 | MVC Library | Angular Equivalent |
 |---|---|
@@ -87,7 +147,23 @@ Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layout
 
 ---
 
+> **[REACT ONLY]**
+
+| MVC Library | React Equivalent |
+|---|---|
+| Kendo UI / Telerik | `@progress/kendo-react-*` |
+| Bootstrap | `react-bootstrap` / `reactstrap` |
+| jQuery Validation | `react-hook-form` + `yup` / `zod` |
+| DataTables | Kendo Grid / MUI DataGrid / `@tanstack/react-table` |
+| Select2 | `react-select` / Kendo DropDownList |
+| Chart.js/Highcharts | Kendo Charts / `recharts` / `@nivo/core` |
+| Toastr / SweetAlert | `react-toastify` / `sweetalert2` |
+
+---
+
 ## Phase 2: Backend — MVC Controllers → Web API
+
+*(Applies to both Angular and React — no framework-specific differences)*
 
 ### Controller Conversion Rules
 
@@ -131,9 +207,11 @@ Verify JWT Bearer, Role/Policy `[Authorize]` attributes, and claims mapping matc
 
 ---
 
-## Phase 3: Frontend — Razor Views → Angular
+## Phase 3: Frontend — Razor Views → [SELECTED_FRAMEWORK]
 
-### Razor → Angular Mapping
+---
+
+### [ANGULAR ONLY] — Razor → Angular Mapping
 
 | Razor | Angular |
 |---|---|
@@ -151,16 +229,49 @@ Verify JWT Bearer, Role/Policy `[Authorize]` attributes, and claims mapping matc
 | `@Html.AntiForgeryToken()` | Not needed (JWT) |
 | Kendo Tag Helpers | Kendo Angular components (if installed in destination) |
 
-### Per-View Steps
+### [ANGULAR ONLY] — Per-View Steps
 
 1. **Analyze destination project** — identify existing component structure, module pattern, service pattern
 2. Create TypeScript model/interface matching the API DTO
-3. Create Angular service using HttpClient — follow destination's existing service patterns (base URL config, error handling)
+3. Create Angular service using `HttpClient` — follow destination's existing service patterns (base URL config, error handling, interceptors)
 4. Create components (list, detail, create/edit) — follow destination's existing component conventions
 5. Add routing — follow destination's existing routing pattern (lazy-loaded modules or standalone routes)
-6. Migrate all form validations — match destination's form validation approach (reactive forms, template forms, or existing custom validators)
+6. Migrate all form validations — match destination's form validation approach (reactive forms, template forms, or existing custom validators using `ValidatorFn` / `AsyncValidatorFn`)
 7. Use third-party controls **only if already installed** in destination (Kendo Angular, Material, etc.)
 8. Migrate CSS/styles into destination's styling approach (SCSS, CSS modules, global styles)
+
+---
+
+### [REACT ONLY] — Razor → React Mapping
+
+| Razor | React |
+|---|---|
+| `_Layout.cshtml` | Root layout component + shared header/sidebar/footer |
+| `@model ViewModel` | TypeScript interface |
+| `@Html.TextBoxFor` | `<input>` controlled component / Kendo React textbox (use what's installed) |
+| `@Html.DropDownListFor` | `<select>` / `react-select` / Kendo DropDownList (use what's installed) |
+| `@Html.ValidationMessageFor` | Form error display via `react-hook-form` `errors` object |
+| `<form asp-action>` | `<form onSubmit={handleSubmit(onSubmit)}>` |
+| `@Html.Partial("_X", item)` | Child component with props |
+| `@Html.ActionLink` | `<Link to="...">` from `react-router-dom` |
+| `@if / @foreach` | `{condition && <JSX>}` / `{array.map(...)}` |
+| `ViewBag.Title` | `document.title` / `react-helmet-async` |
+| `TempData["Msg"]` | Toast notification (use what's installed — `react-toastify`, etc.) |
+| `@Html.AntiForgeryToken()` | Not needed (JWT) |
+| Kendo Tag Helpers | Kendo React components (if installed in destination) |
+
+### [REACT ONLY] — Per-View Steps
+
+1. **Analyze destination project** — identify existing page/component structure, routing setup, service/API call patterns (axios, fetch, React Query, SWR)
+2. Create TypeScript interface matching the API DTO
+3. Create API service / custom hook (`useQuery`, `useMutation`, or custom `useXxx` hook) — follow destination's existing data-fetching patterns
+4. Create page and child components (list, detail, create/edit form) — follow destination's existing component conventions
+5. Add routing — follow destination's existing routing pattern (`react-router-dom` v6 `<Route>`, nested routes, or file-based routing)
+6. Migrate all form validations — use `react-hook-form` with `yup` or `zod` resolver, or the existing validation library in the destination project
+7. Use third-party controls **only if already installed** in destination (Kendo React, MUI, Ant Design, etc.)
+8. Migrate CSS/styles into destination's styling approach (CSS Modules, styled-components, Tailwind, global styles)
+
+---
 
 ### Static Assets
 
@@ -169,6 +280,10 @@ Move `wwwroot/css/` → destination's styles location, `wwwroot/images/` → des
 ---
 
 ## Phase 4: Kendo Control Migration (If Installed in Destination)
+
+---
+
+### [ANGULAR ONLY] — Kendo Angular Migration
 
 Only apply if `@progress/kendo-angular-*` packages exist in destination's `package.json`:
 
@@ -189,23 +304,58 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 
 ---
 
+### [REACT ONLY] — Kendo React Migration
+
+Only apply if `@progress/kendo-react-*` packages exist in destination's `package.json`:
+
+| MVC Kendo | React Kendo |
+|---|---|
+| `Html.Kendo().Grid<T>()` | `<Grid>` from `@progress/kendo-react-grid` |
+| `Html.Kendo().DropDownList()` | `<DropDownList>` from `@progress/kendo-react-dropdowns` |
+| `Html.Kendo().DatePicker()` | `<DatePicker>` from `@progress/kendo-react-dateinputs` |
+| `Html.Kendo().NumericTextBox()` | `<NumericTextBox>` from `@progress/kendo-react-inputs` |
+| `Html.Kendo().Chart()` | `<Chart>` from `@progress/kendo-react-charts` |
+| `Html.Kendo().Upload()` | `<Upload>` from `@progress/kendo-react-upload` |
+| `Html.Kendo().Window()` | `<Dialog>` from `@progress/kendo-react-dialogs` |
+| `Html.Kendo().TabStrip()` | `<TabStrip>` from `@progress/kendo-react-layout` |
+| `Html.Kendo().TreeView()` | `<TreeView>` from `@progress/kendo-react-treeview` |
+| `Html.Kendo().Editor()` | `<Editor>` from `@progress/kendo-react-editor` |
+
+For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSourceResultAsync()` on the API side (same as Angular).
+
+---
+
 ## Phase 5: Per-Controller Checklist
 
+**Backend (both frameworks):**
 - [ ] API Controller (follow destination conventions)
 - [ ] Services + Interfaces (follow destination service layer)
 - [ ] DTOs + AutoMapper profile (follow destination DTO patterns)
-- [ ] All validations migrated (server-side + client-side)
+- [ ] All server-side validations migrated (data annotations, FluentValidation, custom attributes)
 - [ ] Custom middleware/filters migrated
 - [ ] DbContext, entities, configurations, seed data migrated
 - [ ] EF Core interceptors, query filters migrated
 - [ ] Migrations regenerated, connection strings updated
 - [ ] Register services + DbContext in DI
+
+**Frontend — [ANGULAR ONLY]:**
 - [ ] TypeScript models/interfaces
-- [ ] Angular Service (follow destination service pattern)
+- [ ] Angular Service with `HttpClient` (follow destination service pattern)
 - [ ] List, Detail, Create/Edit components (follow destination component pattern)
-- [ ] Feature routing (follow destination routing pattern)
-- [ ] Migrate third-party controls (only what's installed)
-- [ ] Migrate CSS/styles
+- [ ] Feature routing — lazy-loaded modules or standalone routes
+- [ ] Reactive Form validation — `ValidatorFn` / `AsyncValidatorFn`
+- [ ] Migrate Kendo Angular controls (if installed)
+- [ ] Migrate CSS/SCSS styles
+- [ ] E2E test full flow
+
+**Frontend — [REACT ONLY]:**
+- [ ] TypeScript interfaces
+- [ ] API service / custom hook (axios, React Query, etc. — follow destination pattern)
+- [ ] Page and child components (list, detail, create/edit form)
+- [ ] Feature routing — `react-router-dom` routes (follow destination routing pattern)
+- [ ] Form validation — `react-hook-form` + `yup`/`zod` (follow destination pattern)
+- [ ] Migrate Kendo React controls (if installed)
+- [ ] Migrate CSS/styles (CSS Modules, Tailwind, styled-components)
 - [ ] E2E test full flow
 
 **Order:** Core/Auth first → Simplest CRUD feature → Remaining features → Complex features (SignalR, file uploads)
@@ -214,23 +364,50 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 
 ## Quick Reference: Key Transformations
 
-| MVC | Distributed |
+**Backend (both frameworks):**
+
+| MVC | Web API |
 |---|---|
 | `Controller : Controller` → Views | `ControllerBase` → JSON |
-| `.cshtml` Razor Views | Angular Components (`.ts`+`.html`) |
-| ViewModels | DTOs (API) + TS Interfaces (Angular) |
-| `@Html` helpers | Angular directives / Kendo Angular |
-| `[ValidateAntiForgeryToken]` | JWT Bearer (interceptor) |
-| `ModelState` | `[ApiController]` auto-validation + Angular forms |
-| `RedirectToAction` | `router.navigate()` |
-| `TempData` / `ViewBag` | Services / Notification library |
-| Partial Views | Child components (`@Input`/`@Output`) |
-| `_Layout.cshtml` | App shell + shared layout components |
-| jQuery / vanilla JS | RxJS, directives, pipes |
-| Session state | JWT claims / state management |
+| ViewModels | DTOs (API) |
+| `[ValidateAntiForgeryToken]` | JWT Bearer |
+| `ModelState` | `[ApiController]` auto-validation |
+| `RedirectToAction` | `CreatedAtAction` / `NoContent` / status codes |
 | Custom Filters | API Filters / Middleware |
-| FluentValidation / DataAnnotations | API DTOs + Angular form validators |
+| FluentValidation / DataAnnotations | API DTOs + FluentValidation |
 | AutoMapper profiles | Updated AutoMapper profiles for DTOs |
 | DbContext / EF Core entities | Migrated into destination's data layer |
 | EF Core configurations / seed data | `IEntityTypeConfiguration<T>` / `HasData()` in destination structure |
 | EF Core interceptors / query filters | Destination middleware / DbContext overrides |
+
+**Frontend — [ANGULAR ONLY]:**
+
+| MVC | Angular |
+|---|---|
+| `.cshtml` Razor Views | Angular Components (`.ts` + `.html`) |
+| ViewModels | TS Interfaces |
+| `@Html` helpers | Angular directives / pipes / Kendo Angular |
+| `[ValidateAntiForgeryToken]` | `HttpInterceptor` (JWT bearer header) |
+| `ModelState` | Angular Reactive Forms + `ValidatorFn` |
+| `RedirectToAction` | `router.navigate()` |
+| `TempData` / `ViewBag` | Services / `ngx-toastr` |
+| Partial Views | Child components (`@Input`/`@Output`) |
+| `_Layout.cshtml` | App shell + shared layout components |
+| jQuery / vanilla JS | RxJS, directives, pipes |
+| Session state | JWT claims / NgRx / service state |
+
+**Frontend — [REACT ONLY]:**
+
+| MVC | React |
+|---|---|
+| `.cshtml` Razor Views | React Components (`.tsx`) |
+| ViewModels | TS Interfaces |
+| `@Html` helpers | React components / utility functions |
+| `[ValidateAntiForgeryToken]` | Axios interceptor (JWT bearer header) |
+| `ModelState` | `react-hook-form` + `yup`/`zod` |
+| `RedirectToAction` | `useNavigate()` from `react-router-dom` |
+| `TempData` / `ViewBag` | `react-toastify` / context / state |
+| Partial Views | Child components (props) |
+| `_Layout.cshtml` | Root layout component |
+| jQuery / vanilla JS | Custom hooks, utility functions |
+| Session state | JWT claims / Zustand / Redux / Context |
