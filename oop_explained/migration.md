@@ -51,23 +51,34 @@ Do not proceed with any migration until all three paths are collected and valida
 
    > **[ANGULAR ONLY] — If yes:**
    > - Check whether `@progress/kendo-angular-*` packages already exist in the destination project's `package.json`.
-   > - **If already installed** — use the installed version as-is. Do **not** run any install commands.
-   > - **If not installed** — install only the specific Kendo Angular packages needed for the controls being migrated (e.g., `@progress/kendo-angular-grid`, `@progress/kendo-angular-dropdowns`). Do not install the entire Kendo suite.
-   > - Proceed with Phase 4 using Kendo Angular components.
+   > - **If already installed** — use the installed version as-is. Do **not** run any install commands. Skip the version question below.
+   > - **If not installed** — ask: **"Which version of Kendo Angular do you want to install in the destination project? (e.g., 16.x, 17.x — or press Enter to install latest):"**
+   >   - Use the specified version when installing packages (e.g., `@progress/kendo-angular-grid@16.x`). If no version is given, install the latest compatible with the project's Angular version.
+   >   - Install only the specific Kendo Angular packages needed for the controls being migrated (e.g., `@progress/kendo-angular-grid`, `@progress/kendo-angular-dropdowns`). Do not install the entire Kendo suite.
+   > - Note: This is a one-time setup step only. Continue with Phase 1 → 2 → 3 in order. Phase 4's Kendo Angular control mapping table will be referenced **during Phase 3** whenever a Kendo MVC control is encountered — do not skip ahead to Phase 4.
 
    > **[ANGULAR ONLY] — If no:** Skip Phase 4 and use standard HTML/Angular Material controls based on what's installed in the destination Angular project.
 
    > **[REACT ONLY] — If yes:**
    > - Check whether `@progress/kendo-react-*` packages already exist in the destination project's `package.json`.
-   > - **If already installed** — use the installed version as-is. Do **not** run any install commands.
-   > - **If not installed** — install only the specific Kendo React packages needed for the controls being migrated (e.g., `@progress/kendo-react-grid`, `@progress/kendo-react-dropdowns`). Do not install the entire Kendo suite.
-   > - Proceed with Phase 4 using Kendo React components.
+   > - **If already installed** — use the installed version as-is. Do **not** run any install commands. Skip the version question below.
+   > - **If not installed** — ask: **"Which version of Kendo React do you want to install in the destination project? (e.g., 8.x, 9.x — or press Enter to install latest):"**
+   >   - Use the specified version when installing packages (e.g., `@progress/kendo-react-grid@8.x`). If no version is given, install the latest compatible with the project's React version.
+   >   - Install only the specific Kendo React packages needed for the controls being migrated (e.g., `@progress/kendo-react-grid`, `@progress/kendo-react-dropdowns`). Do not install the entire Kendo suite.
+   > - Note: This is a one-time setup step only. Continue with Phase 1 → 2 → 3 in order. Phase 4's Kendo React control mapping table will be referenced **during Phase 3** whenever a Kendo MVC control is encountered — do not skip ahead to Phase 4.
 
    > **[REACT ONLY] — If no:** Skip Phase 4 and use standard HTML/React controls (Material UI, Ant Design, etc.) based on what's installed in the destination React project.
 
+---
+
 ## Overview
 
-Migrate monolithic MVC app into: **[SELECTED_FRAMEWORK]** (existing project, UI) + **C# Web API** (existing project, backend). Packages, CORS, auth already configured in both projects.
+Migrate monolithic MVC app into: **[SELECTED_FRAMEWORK]** (existing project, UI) + **C# Web API** (existing project, backend).
+
+> **Before starting:** Verify the following are already configured in the destination projects. If any are missing, resolve them before generating migration code:
+> - **Web API:** JWT Bearer auth middleware, CORS policy that allows the frontend origin, Swagger/OpenAPI (optional but recommended)
+> - **Frontend:** HTTP client setup (Angular `HttpClientModule` / React `axios` or `fetch`), environment/config file with API base URL placeholder
+> - **Auth interceptor:** Will be created during Phase 3 Auth UI migration if not already present in the destination project
 
 ### Pre-Migration: Analyze Destination Projects First
 
@@ -124,12 +135,25 @@ Before generating any code, **analyze both destination projects** to understand:
 - **Custom validation attributes** — `[CustomValidation]`, `ValidationAttribute` subclasses → API: custom validation attributes on DTOs + frontend: custom validator functions
 - **Business rule validations** — Service-layer validations, domain validations → preserve in Web API services, surface errors via `ProblemDetails` to the frontend
 - **All DbContext classes & EF Core configuration** — Migrate every DbContext, entity configurations, seeding, and migrations into the destination Web API project following its existing data layer structure
+- **SignalR hubs** (if present) — Keep hubs in Web API; create a frontend service/hook to connect via `@microsoft/signalr`
+- **Background jobs** (if present) — Migrate Hangfire, Quartz.NET, or `IHostedService` / `BackgroundService` classes into the Web API project
 
 ---
 
 ## Phase 1: Analyze Source MVC App
 
 Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layouts, partials, tag helpers), View Models, EF Core entities/DbContext, Services, Static assets, Third-party libs (Kendo etc.), Middleware/Filters, Custom Validations, AutoMapper profiles, SignalR hubs, Background jobs.
+
+**Before proceeding to Phase 2, produce an inventory summary** listing:
+- All controllers and their action count
+- All Razor views grouped by controller
+- All EF Core entities and DbContext classes
+- All third-party libraries detected
+- All SignalR hubs (if any)
+- All background jobs (if any)
+- Any custom middleware, filters, or validation attributes
+
+Present this summary to the user and wait for confirmation before beginning Phase 2.
 
 **Library Mapping:**
 
@@ -178,12 +202,13 @@ Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layout
 
 1. Create API controller following **destination project's existing controller conventions**
 2. Move/adapt Service interfaces & implementations into destination's service layer structure
-3. Move Entity models + DbContext into destination's data layer, update connection string
-4. Create DTOs following destination's existing DTO patterns; add AutoMapper profiles to existing profile structure
-5. Migrate all validations (data annotations, FluentValidation, custom attributes) to DTOs
-6. Migrate custom action/exception/result filters into destination's filter or middleware structure
-7. Migrate custom model binders if applicable
-8. Register all services in DI following destination's existing registration pattern
+3. Create DTOs following destination's existing DTO patterns; add AutoMapper profiles to existing profile structure
+4. Migrate all validations (data annotations, FluentValidation, custom attributes) to DTOs
+5. Migrate custom action/exception/result filters into destination's filter or middleware structure
+6. Migrate custom model binders if applicable
+7. Register all services in DI following destination's existing registration pattern
+
+> **Note:** Entity models, DbContext, and connection strings are handled in the dedicated **DbContext & EF Core Migration** section below — do not duplicate that work here.
 
 ### DbContext & EF Core Migration
 
@@ -205,9 +230,49 @@ Migrate **all** DbContext classes and EF Core data layer into the destination We
 
 Verify JWT Bearer, Role/Policy `[Authorize]` attributes, and claims mapping match the MVC app.
 
+### CORS Verification
+
+Verify the Web API's CORS policy explicitly allows the frontend project's origin (development and production URLs). If not configured, add a CORS policy in `Program.cs` before migration proceeds — all API calls from the frontend will fail without it.
+
+### SignalR Migration (if inventoried in Phase 1)
+
+- Keep all SignalR hubs in the Web API project
+- Ensure `AddSignalR()` is registered and `MapHub<T>()` is mapped in `Program.cs`
+- Ensure CORS policy allows credentials (`AllowCredentials()`) for SignalR connections
+
+> **[ANGULAR ONLY]** — Web API side complete. The Angular service wrapping `HubConnection` from `@microsoft/signalr` is created in **Phase 3** as part of the frontend migration.
+
+> **[REACT ONLY]** — Web API side complete. The React hook wrapping `HubConnection` from `@microsoft/signalr` is created in **Phase 3** as part of the frontend migration.
+
+### Background Jobs Migration (if inventoried in Phase 1)
+
+- Migrate Hangfire, Quartz.NET, or `IHostedService` / `BackgroundService` classes into the Web API project
+- Follow the destination Web API's existing background job registration pattern
+- Update job schedules and connection strings as needed
+
 ---
 
 ## Phase 3: Frontend — Razor Views → [SELECTED_FRAMEWORK]
+
+---
+
+### Auth UI Migration (both frameworks)
+
+> **Migrate auth pages first, before any other views.** Route guards and protected routes depend on the auth flow being in place.
+
+If the source MVC app has login, register, or account management pages, migrate them as the first feature in Phase 3:
+
+> **[ANGULAR ONLY]**
+> - Create a login/register component with a Reactive Form
+> - On successful login, store the JWT token (`localStorage` or `sessionStorage`) and redirect
+> - Create an `HttpInterceptor` that attaches the `Authorization: Bearer <token>` header to every outgoing API request (if not already present in the destination project)
+> - Create an `CanActivateFn` route guard that checks for a valid token and redirects to login if missing
+
+> **[REACT ONLY]**
+> - Create login/register page components with `react-hook-form`
+> - On successful login, store the JWT token (`localStorage` or `sessionStorage` or a context/state store) and redirect via `useNavigate()`
+> - Configure an axios interceptor (or equivalent) that attaches the `Authorization: Bearer <token>` header to every outgoing API request (if not already present)
+> - Create a protected route component that checks for a valid token and redirects to login if missing
 
 ---
 
@@ -231,14 +296,18 @@ Verify JWT Bearer, Role/Policy `[Authorize]` attributes, and claims mapping matc
 
 ### [ANGULAR ONLY] — Per-View Steps
 
-1. **Analyze destination project** — identify existing component structure, module pattern, service pattern
+> **One-time setup (do this once before migrating any view):**
+> - Update `environment.ts` / `environment.development.ts` with the Web API base URL if not already set.
+
+1. **Refer to the Pre-Migration destination analysis** — confirm the component structure, module pattern, and service pattern to follow for this feature
 2. Create TypeScript model/interface matching the API DTO
 3. Create Angular service using `HttpClient` — follow destination's existing service patterns (base URL config, error handling, interceptors)
 4. Create components (list, detail, create/edit) — follow destination's existing component conventions
 5. Add routing — follow destination's existing routing pattern (lazy-loaded modules or standalone routes)
 6. Migrate all form validations — match destination's form validation approach (reactive forms, template forms, or existing custom validators using `ValidatorFn` / `AsyncValidatorFn`)
-7. Use third-party controls **only if already installed** in destination (Kendo Angular, Material, etc.)
-8. Migrate CSS/styles into destination's styling approach (SCSS, CSS modules, global styles)
+7. For Kendo MVC controls — reference the **Phase 4 Kendo Angular mapping table** for the equivalent Angular component (only if Kendo migration was confirmed in Project Paths step 4)
+8. Use other third-party controls **only if already installed** in destination (Material, etc.)
+9. Migrate CSS/styles into destination's styling approach (SCSS, CSS modules, global styles)
 
 ---
 
@@ -262,14 +331,18 @@ Verify JWT Bearer, Role/Policy `[Authorize]` attributes, and claims mapping matc
 
 ### [REACT ONLY] — Per-View Steps
 
-1. **Analyze destination project** — identify existing page/component structure, routing setup, service/API call patterns (axios, fetch, React Query, SWR)
+> **One-time setup (do this once before migrating any view):**
+> - Update `.env` / `.env.development` with the Web API base URL (`VITE_API_URL` or `REACT_APP_API_URL`) if not already set.
+
+1. **Refer to the Pre-Migration destination analysis** — confirm the page/component structure, routing setup, and data-fetching pattern to follow for this feature
 2. Create TypeScript interface matching the API DTO
-3. Create API service / custom hook (`useQuery`, `useMutation`, or custom `useXxx` hook) — follow destination's existing data-fetching patterns
+3. Create API service / custom hook (`useQuery`, `useMutation`, or custom `useXxx` hook) — follow destination's existing data-fetching patterns; include error handling (catch API errors and display via toast or inline message)
 4. Create page and child components (list, detail, create/edit form) — follow destination's existing component conventions
 5. Add routing — follow destination's existing routing pattern (`react-router-dom` v6 `<Route>`, nested routes, or file-based routing)
 6. Migrate all form validations — use `react-hook-form` with `yup` or `zod` resolver, or the existing validation library in the destination project
-7. Use third-party controls **only if already installed** in destination (Kendo React, MUI, Ant Design, etc.)
-8. Migrate CSS/styles into destination's styling approach (CSS Modules, styled-components, Tailwind, global styles)
+7. For Kendo MVC controls — reference the **Phase 4 Kendo React mapping table** for the equivalent React component (only if Kendo migration was confirmed in Project Paths step 4)
+8. Use other third-party controls **only if already installed** in destination (MUI, Ant Design, etc.)
+9. Migrate CSS/styles into destination's styling approach (CSS Modules, styled-components, Tailwind, global styles)
 
 ---
 
@@ -279,13 +352,13 @@ Move `wwwroot/css/` → destination's styles location, `wwwroot/images/` → des
 
 ---
 
-## Phase 4: Kendo Control Migration (If Installed in Destination)
+## Phase 4: Kendo Component Reference (Used During Phase 3)
 
----
+> **This is a reference section, not a standalone execution phase.** Phase 3 Per-View Steps point here whenever a Kendo MVC control needs to be replaced. Only apply if Kendo migration was confirmed in Project Paths step 4.
 
-### [ANGULAR ONLY] — Kendo Angular Migration
+### [ANGULAR ONLY] — Kendo Angular Reference
 
-Only apply if `@progress/kendo-angular-*` packages exist in destination's `package.json`:
+Apply this phase only if Kendo migration was confirmed and packages were set up in the Project Paths section (step 4). By this point, `@progress/kendo-angular-*` packages are already installed in the destination project.
 
 | MVC Kendo | Angular Kendo |
 |---|---|
@@ -304,9 +377,9 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 
 ---
 
-### [REACT ONLY] — Kendo React Migration
+### [REACT ONLY] — Kendo React Reference
 
-Only apply if `@progress/kendo-react-*` packages exist in destination's `package.json`:
+Apply this phase only if Kendo migration was confirmed and packages were set up in the Project Paths section (step 4). By this point, `@progress/kendo-react-*` packages are already installed in the destination project.
 
 | MVC Kendo | React Kendo |
 |---|---|
@@ -327,7 +400,25 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 
 ## Phase 5: Per-Controller Checklist
 
-**Backend (both frameworks):**
+> **Complete the one-time setup below once before starting any controller migration. Then use the per-controller checklist for each controller.**
+
+**One-Time Setup — [ANGULAR ONLY]:**
+- [ ] `environment.ts` / `environment.development.ts` API base URL set
+- [ ] Auth pages (login/register) migrated, JWT storage in place
+- [ ] `HttpInterceptor` attaching `Authorization: Bearer` header
+- [ ] `CanActivateFn` route guard for protected routes
+- [ ] SignalR Angular service created using `@microsoft/signalr` (if applicable)
+
+**One-Time Setup — [REACT ONLY]:**
+- [ ] `.env` / `.env.development` API base URL set (`VITE_API_URL` / `REACT_APP_API_URL`)
+- [ ] Auth pages (login/register) migrated, JWT storage in place
+- [ ] Axios interceptor (or equivalent) attaching `Authorization: Bearer` header
+- [ ] Protected route component for guarded routes
+- [ ] SignalR React hook created using `@microsoft/signalr` (if applicable)
+
+---
+
+**Per-Controller — Backend (both frameworks):**
 - [ ] API Controller (follow destination conventions)
 - [ ] Services + Interfaces (follow destination service layer)
 - [ ] DTOs + AutoMapper profile (follow destination DTO patterns)
@@ -337,24 +428,27 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] EF Core interceptors, query filters migrated
 - [ ] Migrations regenerated, connection strings updated
 - [ ] Register services + DbContext in DI
+- [ ] SignalR hub verified in Web API + CORS credentials allowed (if applicable)
+- [ ] Background jobs migrated and registered (if applicable)
 
-**Frontend — [ANGULAR ONLY]:**
+**Per-Controller — Frontend [ANGULAR ONLY]:**
 - [ ] TypeScript models/interfaces
 - [ ] Angular Service with `HttpClient` (follow destination service pattern)
 - [ ] List, Detail, Create/Edit components (follow destination component pattern)
 - [ ] Feature routing — lazy-loaded modules or standalone routes
 - [ ] Reactive Form validation — `ValidatorFn` / `AsyncValidatorFn`
-- [ ] Migrate Kendo Angular controls (if installed)
+- [ ] Kendo Angular controls replaced using Phase 4 reference table (if confirmed in Project Paths step 4)
 - [ ] Migrate CSS/SCSS styles
 - [ ] E2E test full flow
 
-**Frontend — [REACT ONLY]:**
+**Per-Controller — Frontend [REACT ONLY]:**
 - [ ] TypeScript interfaces
 - [ ] API service / custom hook (axios, React Query, etc. — follow destination pattern)
 - [ ] Page and child components (list, detail, create/edit form)
 - [ ] Feature routing — `react-router-dom` routes (follow destination routing pattern)
 - [ ] Form validation — `react-hook-form` + `yup`/`zod` (follow destination pattern)
-- [ ] Migrate Kendo React controls (if installed)
+- [ ] Kendo React controls replaced using Phase 4 reference table (if confirmed in Project Paths step 4)
+- [ ] SignalR React hook wired into component (if applicable)
 - [ ] Migrate CSS/styles (CSS Modules, Tailwind, styled-components)
 - [ ] E2E test full flow
 
@@ -379,6 +473,8 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 | DbContext / EF Core entities | Migrated into destination's data layer |
 | EF Core configurations / seed data | `IEntityTypeConfiguration<T>` / `HasData()` in destination structure |
 | EF Core interceptors / query filters | Destination middleware / DbContext overrides |
+| SignalR hubs | Kept in Web API; frontend service/hook via `@microsoft/signalr` |
+| Background jobs | Migrated into Web API — Hangfire / `IHostedService` |
 
 **Frontend — [ANGULAR ONLY]:**
 
