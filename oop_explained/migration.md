@@ -1,5 +1,187 @@
 # ASP.NET Core MVC → Angular / React + Web API Migration Plan
 
+## Determinism & Consistency Rules
+
+> **CRITICAL — READ FIRST:** This migration plan must produce **identical output** every time it is executed against the same source and destination projects. Follow these rules to eliminate variation:
+
+### Decision Resolution Order
+
+When this document offers multiple alternatives (separated by `/`, `or`, or listed in a table), **never pick randomly**. Always resolve using this strict priority:
+
+1. **Use what is already installed in the destination project.** Scan `package.json` (frontend) and `.csproj` (Web API) for installed packages. If a package is already present, use it — no exceptions.
+2. **If nothing is installed, use the first option listed** in this document. The first option in every list, table cell, or slash-separated pair is the **default**. Only use a later option if the first is explicitly incompatible with the destination project's framework version.
+3. **Never introduce a new library** that is not already installed in the destination project and not listed as the first option in this document.
+
+### Processing Order
+
+- **Phase execution:** Always execute Phase 1 → Phase 2 → Phase 3 → Phase 5 in strict order. Phase 4 is a reference table consulted during Phase 3 only.
+- **Controller processing order:** Process controllers in **alphabetical order by controller name** (e.g., `AccountController` before `DashboardController` before `OrderController`). Within each controller, process actions in the order they appear in the source file, top to bottom.
+- **View processing order:** For each controller, process views in this fixed order: Index/List → Details → Create → Edit → Delete → any remaining views alphabetically.
+- **Service/DTO creation order:** Create services and DTOs in the same order as their associated controllers are processed.
+
+### Naming Conventions (deterministic)
+
+All generated file and symbol names must follow these exact rules — no creative renaming:
+
+> **[ANGULAR ONLY]:**
+> - Component: `{source-view-name}.component.ts` (kebab-case) — e.g., `student-list.component.ts`, `student-detail.component.ts`
+> - Service: `{controller-name}.service.ts` — e.g., `student.service.ts`
+> - Model/Interface: `{dto-name}.model.ts` — e.g., `student.model.ts`
+> - Module (if NgModule): `{feature-name}.module.ts` — e.g., `student.module.ts`
+> - Guard: `{feature-name}.guard.ts` — e.g., `auth.guard.ts`
+> - Interceptor: `{purpose}.interceptor.ts` — e.g., `auth.interceptor.ts`, `error.interceptor.ts`
+> - Folder structure: `src/app/{feature-name}/` — one folder per MVC controller
+
+> **[REACT ONLY]:**
+> - Page component: `{SourceViewName}Page.tsx` (PascalCase) — e.g., `StudentListPage.tsx`, `StudentDetailPage.tsx`
+> - Component: `{SourceViewName}.tsx` — e.g., `StudentForm.tsx`
+> - Hook: `use{Feature}.ts` — e.g., `useStudents.ts`
+> - Service: `{feature}Service.ts` or `{feature}Api.ts` — e.g., `studentService.ts`
+> - Model/Interface: `{dto-name}.types.ts` — e.g., `student.types.ts`
+> - Folder structure: `src/pages/{feature-name}/` for pages, `src/components/{feature-name}/` for shared components — one folder per MVC controller
+
+> **Web API (both frameworks):**
+> - Controller: `{SourceControllerName}Controller.cs` → `{Same}Controller.cs` (keep original name)
+> - DTO: `{SourceViewModelName}Dto.cs` — replace `ViewModel` suffix with `Dto`
+> - Service interface: `I{ServiceName}.cs` (keep original name)
+> - Service implementation: `{ServiceName}.cs` (keep original name)
+> - AutoMapper profile: `{Feature}MappingProfile.cs`
+
+**Override:** If the destination project already has established naming conventions that differ from the above, use the destination's conventions instead. Document which convention is followed in the inventory summary.
+
+### Code Style Determinism
+
+- **Do not** add comments like `// TODO`, `// FIXME`, or explanatory comments to generated code unless the source code had them.
+- **Do not** reorder properties, methods, or fields. Preserve the source code's ordering.
+- **Do not** rename variables or method parameters. Keep original names; only change the type/signature where required by the framework.
+- **Do not** refactor, optimize, or "improve" source logic. Migrate it verbatim.
+- **String literals:** Preserve all string values (error messages, labels, button text) exactly as they appear in the source — character for character, including casing and punctuation.
+
+---
+
+## Session Resilience & Checkpoint Resume
+
+> **CRITICAL:** This migration may span multiple sessions. The AI session may time out, the connection may break, or the user may need to pause and resume later. The migration **must not restart from scratch** when this happens. Follow these rules to ensure continuity.
+
+### Migration Progress Tracker
+
+At the start of every migration (or resume), create and maintain a progress tracker file in the **destination frontend project root** named `MIGRATION_PROGRESS.md`. This file is the single source of truth for what has been completed.
+
+**Create this file immediately after Phase 1 inventory is confirmed by the user.** Structure it exactly as follows:
+
+```markdown
+# Migration Progress Tracker
+<!-- AUTO-GENERATED — do not edit manually. Updated by migration agent after each step. -->
+
+## Session Info
+- Framework: [Angular/React]
+- Source MVC: [path]
+- Dest Frontend: [path]
+- Dest Web API: [path]
+- Kendo: [yes/no, version]
+- Started: [date]
+- Last Updated: [date-time]
+
+## Phase Status
+- [x] Phase 1: Source Analysis — COMPLETED
+- [ ] Phase 2: Backend Migration — [NOT STARTED / IN PROGRESS / COMPLETED]
+- [ ] Phase 3: Frontend Migration — [NOT STARTED / IN PROGRESS / COMPLETED]
+- [ ] Phase 5: Verification — [NOT STARTED / IN PROGRESS / COMPLETED]
+
+## One-Time Setup Status
+- [ ] Environment config files set
+- [ ] Auth pages migrated
+- [ ] Auth interceptor created
+- [ ] Route guard created
+- [ ] Error pages created
+- [ ] SignalR service/hook created (if applicable)
+- [ ] Localization setup (if applicable)
+- [ ] CSS/assets base migration done
+
+## Controller Migration Status
+<!-- One row per controller, alphabetical order. Update status after EACH controller completes. -->
+| Controller | Backend API | Backend Services/DTOs | Backend Validations | Frontend Components | Frontend Validations | Frontend CSS | Status |
+|---|---|---|---|---|---|---|---|
+| AccountController | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | NOT STARTED |
+| DashboardController | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | NOT STARTED |
+| ... | | | | | | | |
+
+## Current Position
+- **Currently working on:** [Phase X, ControllerName, Step Y]
+- **Next step:** [description of what to do next]
+- **Last completed file:** [path of last file created/modified]
+```
+
+### Checkpoint Rules
+
+1. **Update `MIGRATION_PROGRESS.md` after every completed unit of work.** A unit of work is:
+   - Completing a phase
+   - Completing one-time setup items
+   - Completing a controller's backend migration (all backend checklist items for that controller)
+   - Completing a controller's frontend migration (all frontend checklist items for that controller)
+   - Completing any standalone section (CSS migration, error pages, etc.)
+
+2. **Always update the "Current Position" section** before starting any new unit of work, so that if the session breaks mid-work, the resume knows exactly where to pick up.
+
+3. **Mark checkboxes as `[x]`** in the tracker as each item completes. Never uncheck a completed item.
+
+### How to Resume After a Break
+
+When a session starts (or is restarted after a timeout/break), **before doing anything else**, follow these steps:
+
+1. **Check if `MIGRATION_PROGRESS.md` exists** in the destination frontend project root.
+
+2. **If it does NOT exist** — this is a fresh migration. Proceed normally from the "Workspace Modification Permission" section.
+
+3. **If it DOES exist** — this is a **resume**. Do the following:
+   a. Read `MIGRATION_PROGRESS.md` completely.
+   b. Read the "Session Info" section to restore all project paths, framework choice, and Kendo settings — **do NOT re-ask the user for these**.
+   c. Read "Phase Status" to determine which phase is current.
+   d. Read "Controller Migration Status" to determine which controllers are already done.
+   e. Read "Current Position" to determine exactly where to resume.
+   f. **Verify the last completed work** — check that the files listed as "Last completed file" actually exist and are valid. If the last unit was interrupted mid-way (file exists but is incomplete), redo only that unit.
+   g. **Print a resume summary** to the user:
+      ```
+      Resuming migration from checkpoint:
+      - Phase: [X]
+      - Last completed: [controller/step]
+      - Next: [controller/step]
+      - Controllers done: [N of M]
+      ```
+   h. **Ask the user:** "Resume from this checkpoint? (yes / restart from scratch)"
+   i. If **yes** — continue from the "Next step" recorded in the tracker. Do not repeat completed work.
+   j. If **restart** — delete `MIGRATION_PROGRESS.md` and start fresh from "Workspace Modification Permission".
+
+### Preventing Session Timeout
+
+To minimize the risk of session breaks during large migrations:
+
+1. **Work in small atomic units.** Complete ONE controller's backend migration fully, update the tracker, then proceed to the next. Do not batch multiple controllers.
+
+2. **Do not generate large code blocks without saving.** After generating each file, write it to disk immediately. Do not accumulate multiple files in memory before writing.
+
+3. **Prefer multiple small file writes over one massive output.** If a controller has 4 components, write each component file individually rather than generating all 4 at once.
+
+4. **After every 3 controllers completed**, print a brief status update to the user:
+   ```
+   Progress: [N/M] controllers migrated. Checkpoint saved.
+   ```
+
+5. **If the migration has more than 10 controllers**, process them in batches of 5. After each batch:
+   - Update `MIGRATION_PROGRESS.md`
+   - Print progress summary
+   - Continue to next batch without pausing (unless user interrupts)
+
+### Recovery from Partial File Writes
+
+If a session breaks while a file was being written:
+- On resume, check the "Last completed file" from the tracker.
+- If the file exists but appears truncated (missing closing braces, incomplete class, syntax errors), **delete and regenerate** that single file.
+- If the file does not exist, generate it from scratch.
+- Do NOT re-generate files that were fully completed in previous sessions — check the tracker.
+
+---
+
 ## Workspace Modification Permission
 
 Before starting any migration work, ask the user:
@@ -119,10 +301,31 @@ Before generating any code, **analyze both destination projects** to understand:
 
 ### Migration Must Include
 
-- **All server-side validations** — Data annotations, FluentValidation rules, custom `IValidatableObject` implementations, action filter validations → migrate to API DTOs (server-side)
-- **All client-side validations:**
-  > **[ANGULAR ONLY]** jQuery Unobtrusive Validation, custom JS validators → Angular Reactive Forms validators (built-in + custom `ValidatorFn` / `AsyncValidatorFn`)
-  > **[REACT ONLY]** jQuery Unobtrusive Validation, custom JS validators → `react-hook-form` validators with `yup` or `zod` schema (or built-in validation rules matching what's installed)
+- **All server-side validations (STRICT — migrate every rule)** — Data annotations (`[Required]`, `[StringLength]`, `[Range]`, `[RegularExpression]`, `[Compare]`, `[EmailAddress]`, `[Phone]`, `[CreditCard]`, `[Url]`, etc.), FluentValidation rules (all `RuleFor` chains including `.Must()`, `.When()`, `.Unless()`, `.WithMessage()`), custom `IValidatableObject` implementations, action filter validations, custom `ValidationAttribute` subclasses → migrate **all** to API DTOs with identical rules (server-side). Do not skip, simplify, or weaken any validation rule. Every field constraint, conditional rule, cross-field comparison, and custom error message must be preserved exactly.
+- **All client-side validations (STRICT — migrate every rule to the frontend):**
+  > **CRITICAL:** Every validation that executes in the browser in the source MVC app must have a corresponding client-side validator in the destination frontend. This includes: jQuery Unobtrusive Validation attributes (`data-val-*`), `data-val-required`, `data-val-length`, `data-val-range`, `data-val-regex`, `data-val-equalto`, `data-val-remote` (async), custom `$.validator.addMethod()` / `$.validator.unobtrusive.adapters.add()` validators, inline JavaScript validation, and any custom validation logic in `.js` files. **No validation may exist only on the server — if it was client-side in MVC, it must remain client-side in the destination.**
+
+  > **[ANGULAR ONLY]** Migrate every client-side validation rule to Angular Reactive Forms:
+  > - `data-val-required` → `Validators.required`
+  > - `data-val-length-max` / `data-val-length-min` → `Validators.minLength()` / `Validators.maxLength()`
+  > - `data-val-range-min` / `data-val-range-max` → `Validators.min()` / `Validators.max()`
+  > - `data-val-regex-pattern` → `Validators.pattern()`
+  > - `data-val-equalto` → custom cross-field `ValidatorFn` (e.g., password confirmation match)
+  > - `data-val-remote` → custom `AsyncValidatorFn` calling the equivalent API endpoint
+  > - Custom `$.validator.addMethod()` → custom `ValidatorFn` with the same logic
+  > - All custom error messages (`data-val-*` messages) → `{ errorKey: 'Exact same error message' }` in the validator or displayed via `<mat-error>` / custom error component
+  > - Conditional validations (`.When()` / `.Unless()` in FluentValidation reflected client-side) → `ValidatorFn` that checks the condition at runtime
+
+  > **[REACT ONLY]** Migrate every client-side validation rule to `react-hook-form` + `yup` schema (default; use `zod` only if `zod` is already installed in the destination and `yup` is not):
+  > - `data-val-required` → `yup.string().required('message')` (if using zod: `z.string().min(1, 'message')`)
+  > - `data-val-length-max` / `data-val-length-min` → `.min()` / `.max()` with original messages
+  > - `data-val-range-min` / `data-val-range-max` → `.min()` / `.max()` on number schema
+  > - `data-val-regex-pattern` → `.matches(pattern, message)` (if using zod: `z.string().regex()`)
+  > - `data-val-equalto` → `.oneOf([yup.ref('field')])` (if using zod: `zod.refine()`) for cross-field match
+  > - `data-val-remote` → custom async validation via `yup.test()` calling the API endpoint (if using zod: `zod.refine()`)
+  > - Custom `$.validator.addMethod()` → custom `yup.test()` with the same logic (if using zod: `zod.refine()`)
+  > - All custom error messages → preserved exactly in the schema `.required('Same message')` / `.min(n, 'Same message')`
+  > - Conditional validations → `.when()` in yup (if using zod: `.refine()` with conditional logic)
 - **AutoMapper profiles** — All entity↔ViewModel mappings → entity↔DTO AutoMapper profiles in Web API
 - **Custom middleware** — Exception handling, request logging, tenant resolution, rate limiting, etc. → Web API middleware pipeline
 - **Custom action filters** — Authorization filters, validation filters, audit filters → Web API `IActionFilter` / `IAsyncActionFilter` / middleware
@@ -149,39 +352,52 @@ Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layout
 - All Razor views grouped by controller
 - All EF Core entities and DbContext classes
 - All third-party libraries detected
+- All client-side validations — list every form with its `data-val-*` rules, custom `$.validator.addMethod()` validators, `data-val-remote` endpoints, and inline JS validation logic
+- All server-side validations — data annotations on ViewModels/entities, FluentValidation validators, custom `ValidationAttribute` subclasses, `IValidatableObject` implementations
+- All AutoMapper profiles and entity↔ViewModel mappings
 - All SignalR hubs (if any)
 - All background jobs (if any)
 - Any custom middleware, filters, or validation attributes
+- All MVC Areas and their controllers/views (if any)
+- All file upload endpoints (`IFormFile` parameters, multipart form handling)
+- All custom error pages (404, 500, AccessDenied, etc.)
+- Localization/i18n usage — `.resx` resource files, `IStringLocalizer`, `IHtmlLocalizer`, `data-val-*` localized messages (if any)
 
 Present this summary to the user and wait for confirmation before beginning Phase 2.
+
+**After user confirms the inventory:** Create `MIGRATION_PROGRESS.md` in the destination frontend project root (see **Session Resilience & Checkpoint Resume** section for exact format). Populate the "Session Info", mark Phase 1 as `[x] COMPLETED`, and populate the "Controller Migration Status" table with all controllers from the inventory in alphabetical order, all marked `NOT STARTED`.
 
 **Library Mapping:**
 
 > **[ANGULAR ONLY]**
 
-| MVC Library | Angular Equivalent |
+> Resolution: Use the **first** package in the "Angular Equivalent" column. If it is not installed and not compatible, try the next. See **Determinism & Consistency Rules** above.
+
+| MVC Library | Angular Equivalent (priority order — use first match) |
 |---|---|
 | Kendo UI / Telerik | `@progress/kendo-angular-*` |
-| Bootstrap | `ngx-bootstrap` / `@ng-bootstrap/ng-bootstrap` |
-| jQuery Validation | Angular Reactive Forms |
-| DataTables | Kendo Grid / Material Table |
-| Select2 | Kendo DropDownList / Material Autocomplete |
-| Chart.js/Highcharts | Kendo Charts / `ngx-charts` |
-| Toastr / SweetAlert | `ngx-toastr` / `sweetalert2` |
+| Bootstrap | 1. `@ng-bootstrap/ng-bootstrap` → 2. `ngx-bootstrap` |
+| jQuery Validation | Angular Reactive Forms (built-in, no package needed) |
+| DataTables | 1. `@progress/kendo-angular-grid` (if Kendo confirmed) → 2. Angular Material Table |
+| Select2 | 1. `@progress/kendo-angular-dropdowns` (if Kendo confirmed) → 2. Angular Material Autocomplete |
+| Chart.js/Highcharts | 1. `@progress/kendo-angular-charts` (if Kendo confirmed) → 2. `ngx-charts` |
+| Toastr / SweetAlert | 1. `ngx-toastr` → 2. `sweetalert2` |
 
 ---
 
 > **[REACT ONLY]**
 
-| MVC Library | React Equivalent |
+> Resolution: Use the **first** package in the "React Equivalent" column. If it is not installed and not compatible, try the next. See **Determinism & Consistency Rules** above.
+
+| MVC Library | React Equivalent (priority order — use first match) |
 |---|---|
 | Kendo UI / Telerik | `@progress/kendo-react-*` |
-| Bootstrap | `react-bootstrap` / `reactstrap` |
-| jQuery Validation | `react-hook-form` + `yup` / `zod` |
-| DataTables | Kendo Grid / MUI DataGrid / `@tanstack/react-table` |
-| Select2 | `react-select` / Kendo DropDownList |
-| Chart.js/Highcharts | Kendo Charts / `recharts` / `@nivo/core` |
-| Toastr / SweetAlert | `react-toastify` / `sweetalert2` |
+| Bootstrap | 1. `react-bootstrap` → 2. `reactstrap` |
+| jQuery Validation | `react-hook-form` + `yup` (default). Use `zod` only if `zod` is already installed and `yup` is not. |
+| DataTables | 1. `@progress/kendo-react-grid` (if Kendo confirmed) → 2. MUI DataGrid → 3. `@tanstack/react-table` |
+| Select2 | 1. `react-select` → 2. `@progress/kendo-react-dropdowns` (if Kendo confirmed) |
+| Chart.js/Highcharts | 1. `@progress/kendo-react-charts` (if Kendo confirmed) → 2. `recharts` → 3. `@nivo/core` |
+| Toastr / SweetAlert | 1. `react-toastify` → 2. `sweetalert2` |
 
 ---
 
@@ -250,6 +466,75 @@ Verify the Web API's CORS policy explicitly allows the frontend project's origin
 - Follow the destination Web API's existing background job registration pattern
 - Update job schedules and connection strings as needed
 
+### File Upload Migration (if inventoried in Phase 1)
+
+- Migrate all `IFormFile` / `IFormFileCollection` action parameters to Web API endpoints accepting `[FromForm]` multipart data
+- Preserve file size limits, allowed file type validations, and virus scan integrations
+- If the source stores files to `wwwroot/uploads/` or a local path, update to the destination's file storage approach (local disk, Azure Blob, S3, etc.)
+- Return file URLs or identifiers via API response; the frontend will handle display
+
+> **[ANGULAR ONLY]** — Create an Angular upload component using Kendo Upload (`<kendo-upload>`) if Kendo is installed, or a custom file input with `HttpClient` `FormData` upload. Show progress indicators if the source MVC app had them.
+
+> **[REACT ONLY]** — Create a React upload component using Kendo Upload (`<Upload>`) if Kendo is installed, or a custom `<input type="file">` with `axios`/`fetch` `FormData` upload. Show progress indicators if the source MVC app had them.
+
+### MVC Areas Migration (if inventoried in Phase 1)
+
+- Map each MVC Area to a dedicated routing module/section in the frontend:
+
+> **[ANGULAR ONLY]** — Each MVC Area → a lazy-loaded Angular feature module or standalone route group under a matching URL prefix (e.g., `/admin/...`, `/portal/...`). Create area-specific layout components if the source Area has its own `_Layout.cshtml`.
+
+> **[REACT ONLY]** — Each MVC Area → a nested route group in `react-router-dom` under a matching URL prefix. Create area-specific layout components if the source Area has its own `_Layout.cshtml`.
+
+- On the Web API side, Area controllers become API controllers under `[Route("api/[area]/[controller]")]` or the destination's existing route prefix convention.
+
+### Custom Error Pages Migration
+
+- Migrate custom error pages (`404 Not Found`, `500 Internal Server Error`, `403 AccessDenied`, `401 Unauthorized`, etc.) from the source MVC app:
+
+> **[ANGULAR ONLY]** — Create Angular error page components and configure a wildcard route (`**`) for 404. Add an HTTP interceptor (or extend the existing one) to catch `401`, `403`, and `5xx` API responses and redirect to the appropriate error component or display an error notification.
+
+> **[REACT ONLY]** — Create React error page components and configure a catch-all `<Route path="*">` for 404. Add an axios response interceptor (or extend the existing one) to catch `401`, `403`, and `5xx` API responses and redirect to the appropriate error page or display an error notification.
+
+- Preserve the same error page design/layout from the source MVC app (apply CSS migration rules).
+
+### API Error Handling & ProblemDetails Display
+
+> **STRICT:** When the Web API returns validation errors (HTTP 400) via `ProblemDetails` or `ValidationProblemDetails`, the frontend must parse and display these errors **inline next to the corresponding form fields** — not as a generic toast or alert. This ensures server-side validation failures are surfaced with the same UX as client-side validation errors.
+
+> **[ANGULAR ONLY]:**
+> - In the Angular service or HTTP interceptor, catch `400` responses and extract the `errors` object from `ProblemDetails` (`{ "errors": { "FieldName": ["Error message"] } }`)
+> - Map each error key to the corresponding `FormControl` and call `setErrors()` to display server-side errors inline
+> - For non-field-level errors (business rule violations), display via notification service or a form-level error summary
+
+> **[REACT ONLY]:**
+> - In the API service / submit handler, catch `400` responses and extract the `errors` object from `ProblemDetails`
+> - Map each error key to the corresponding field and call `setError('fieldName', { message: '...' })` from `react-hook-form` to display server-side errors inline
+> - For non-field-level errors, display via toast notification or a form-level error summary
+
+### Localization / i18n Migration (if inventoried in Phase 1)
+
+- If the source MVC app uses `.resx` resource files, `IStringLocalizer<T>`, `IHtmlLocalizer<T>`, or `IViewLocalizer`:
+  - Extract all localized strings into structured JSON files or the destination's i18n format
+  - Migrate server-side localized validation messages to API DTOs (use `WithMessage()` with localized strings or `IStringLocalizer` in FluentValidation)
+
+> **[ANGULAR ONLY]** — Use `@ngx-translate/core` or Angular's built-in `$localize` / `@angular/localize` (match what's installed). Create translation JSON files per locale. Replace all hardcoded UI strings with translation keys.
+
+> **[REACT ONLY]** — Use `react-i18next` or `react-intl` (match what's installed). Create translation JSON files per locale. Replace all hardcoded UI strings with translation hooks (`t('key')` / `useTranslation()`).
+
+- If the source has no localization, skip this section entirely.
+
+### Environment Configuration (all environments)
+
+- Configure API base URLs for **all environments**, not just development:
+
+> **[ANGULAR ONLY]:**
+> - `environment.ts` (local dev), `environment.development.ts`, `environment.staging.ts` (if applicable), `environment.prod.ts` — each with the correct API URL for that environment.
+
+> **[REACT ONLY]:**
+> - `.env.local`, `.env.development`, `.env.staging` (if applicable), `.env.production` — each with the correct API URL (`VITE_API_URL` / `REACT_APP_API_URL`).
+
+- On the Web API side, ensure `appsettings.json`, `appsettings.Development.json`, `appsettings.Staging.json` (if applicable), and `appsettings.Production.json` have correct CORS origins, connection strings, and JWT settings for each environment.
+
 ---
 
 ## Phase 3: Frontend — Razor Views → [SELECTED_FRAMEWORK]
@@ -264,14 +549,14 @@ If the source MVC app has login, register, or account management pages, migrate 
 
 > **[ANGULAR ONLY]**
 > - Create a login/register component with a Reactive Form
-> - On successful login, store the JWT token (`localStorage` or `sessionStorage`) and redirect
+> - On successful login, store the JWT token in `localStorage` (default; use `sessionStorage` only if the source MVC app used session-scoped auth cookies) and redirect
 > - Create an `HttpInterceptor` that attaches the `Authorization: Bearer <token>` header to every outgoing API request (if not already present in the destination project)
 > - Create an `CanActivateFn` route guard that checks for a valid token and redirects to login if missing
 
 > **[REACT ONLY]**
 > - Create login/register page components with `react-hook-form`
-> - On successful login, store the JWT token (`localStorage` or `sessionStorage` or a context/state store) and redirect via `useNavigate()`
-> - Configure an axios interceptor (or equivalent) that attaches the `Authorization: Bearer <token>` header to every outgoing API request (if not already present)
+> - On successful login, store the JWT token in `localStorage` (default; use `sessionStorage` only if the source MVC app used session-scoped auth cookies). If the destination project already uses a state store (Zustand, Redux, Context), store the token there instead. Redirect via `useNavigate()`.
+> - Configure an axios interceptor (or `fetch` wrapper if axios is not installed) that attaches the `Authorization: Bearer <token>` header to every outgoing API request (if not already present)
 > - Create a protected route component that checks for a valid token and redirects to login if missing
 
 ---
@@ -282,15 +567,15 @@ If the source MVC app has login, register, or account management pages, migrate 
 |---|---|
 | `_Layout.cshtml` | App shell + shared header/sidebar/footer (match destination layout) |
 | `@model ViewModel` | TypeScript interface |
-| `@Html.TextBoxFor` | `<input formControlName>` / Kendo textbox (use what's installed) |
-| `@Html.DropDownListFor` | Kendo dropdownlist / Material select (use what's installed) |
-| `@Html.ValidationMessageFor` | Angular form error display (match destination pattern) |
+| `@Html.TextBoxFor` | `<input formControlName>` — use Kendo textbox only if Kendo is installed in destination |
+| `@Html.DropDownListFor` | Kendo `<kendo-dropdownlist>` if Kendo installed, otherwise Angular Material `<mat-select>` if installed, otherwise native `<select>` |
+| `@Html.ValidationMessageFor` | Angular form error display — use destination's existing error display pattern; if none exists, use inline `<div *ngIf="control.errors">` |
 | `<form asp-action>` | `<form [formGroup] (ngSubmit)>` |
 | `@Html.Partial("_X", item)` | Child component with `@Input` |
 | `@Html.ActionLink` | `<a [routerLink]>` |
-| `@if / @foreach` | `*ngIf`/`*ngFor` or `@if`/`@for` (match destination's Angular version) |
-| `ViewBag.Title` | Title service |
-| `TempData["Msg"]` | Notification service (use what's installed in destination) |
+| `@if / @foreach` | Use destination's Angular version syntax: Angular 17+ → `@if`/`@for`; Angular <17 → `*ngIf`/`*ngFor`. Check `package.json` for Angular version. |
+| `ViewBag.Title` | Angular `Title` service (`import { Title } from '@angular/platform-browser'`) |
+| `TempData["Msg"]` | `ngx-toastr` notification service (default). Use `sweetalert2` only if already installed and `ngx-toastr` is not. |
 | `@Html.AntiForgeryToken()` | Not needed (JWT) |
 | Kendo Tag Helpers | Kendo Angular components (if installed in destination) |
 
@@ -304,10 +589,10 @@ If the source MVC app has login, register, or account management pages, migrate 
 3. Create Angular service using `HttpClient` — follow destination's existing service patterns (base URL config, error handling, interceptors)
 4. Create components (list, detail, create/edit) — follow destination's existing component conventions
 5. Add routing — follow destination's existing routing pattern (lazy-loaded modules or standalone routes)
-6. Migrate all form validations — match destination's form validation approach (reactive forms, template forms, or existing custom validators using `ValidatorFn` / `AsyncValidatorFn`)
+6. **Migrate ALL form validations (STRICT)** — For every form field in the Razor view, extract every `data-val-*` attribute, jQuery Unobtrusive rule, and custom JS validator. Create an equivalent Angular Reactive Forms validator for **each one** — `Validators.required`, `Validators.minLength`, `Validators.maxLength`, `Validators.min`, `Validators.max`, `Validators.pattern`, custom `ValidatorFn` for cross-field rules, custom `AsyncValidatorFn` for remote/async validations. Preserve **all custom error messages exactly**. Display validation errors inline next to each field, matching the same UX as the source MVC app (show on blur / on submit, same positioning). If the source uses `@Html.ValidationSummary()`, create an equivalent form-level error summary component.
 7. For Kendo MVC controls — reference the **Phase 4 Kendo Angular mapping table** for the equivalent Angular component (only if Kendo migration was confirmed in Project Paths step 4)
-8. Use other third-party controls **only if already installed** in destination (Material, etc.)
-9. Migrate CSS/styles into destination's styling approach (SCSS, CSS modules, global styles)
+8. Use other third-party controls **only if already installed** in destination (Material, etc.) — do not install new UI libraries
+9. Migrate CSS/styles — use destination's existing styling approach. Check in order: Angular component styles (`.scss`/`.css` co-located) → global `styles.scss` → CSS Modules if configured
 
 ---
 
@@ -317,15 +602,15 @@ If the source MVC app has login, register, or account management pages, migrate 
 |---|---|
 | `_Layout.cshtml` | Root layout component + shared header/sidebar/footer |
 | `@model ViewModel` | TypeScript interface |
-| `@Html.TextBoxFor` | `<input>` controlled component / Kendo React textbox (use what's installed) |
-| `@Html.DropDownListFor` | `<select>` / `react-select` / Kendo DropDownList (use what's installed) |
-| `@Html.ValidationMessageFor` | Form error display via `react-hook-form` `errors` object |
+| `@Html.TextBoxFor` | `<input>` controlled component — use Kendo React `<Input>` only if Kendo is installed in destination |
+| `@Html.DropDownListFor` | Kendo `<DropDownList>` if Kendo installed, otherwise `react-select` if installed, otherwise native `<select>` |
+| `@Html.ValidationMessageFor` | `{errors.fieldName && <span>{errors.fieldName.message}</span>}` via `react-hook-form` `formState.errors` |
 | `<form asp-action>` | `<form onSubmit={handleSubmit(onSubmit)}>` |
 | `@Html.Partial("_X", item)` | Child component with props |
 | `@Html.ActionLink` | `<Link to="...">` from `react-router-dom` |
 | `@if / @foreach` | `{condition && <JSX>}` / `{array.map(...)}` |
-| `ViewBag.Title` | `document.title` / `react-helmet-async` |
-| `TempData["Msg"]` | Toast notification (use what's installed — `react-toastify`, etc.) |
+| `ViewBag.Title` | `document.title` assignment in `useEffect`. Use `react-helmet-async` only if already installed. |
+| `TempData["Msg"]` | `react-toastify` (default). Use `sweetalert2` only if already installed and `react-toastify` is not. |
 | `@Html.AntiForgeryToken()` | Not needed (JWT) |
 | Kendo Tag Helpers | Kendo React components (if installed in destination) |
 
@@ -339,16 +624,30 @@ If the source MVC app has login, register, or account management pages, migrate 
 3. Create API service / custom hook (`useQuery`, `useMutation`, or custom `useXxx` hook) — follow destination's existing data-fetching patterns; include error handling (catch API errors and display via toast or inline message)
 4. Create page and child components (list, detail, create/edit form) — follow destination's existing component conventions
 5. Add routing — follow destination's existing routing pattern (`react-router-dom` v6 `<Route>`, nested routes, or file-based routing)
-6. Migrate all form validations — use `react-hook-form` with `yup` or `zod` resolver, or the existing validation library in the destination project
+6. **Migrate ALL form validations (STRICT)** — For every form field in the Razor view, extract every `data-val-*` attribute, jQuery Unobtrusive rule, and custom JS validator. Create an equivalent `yup` schema rule (default; use `zod` only if already installed and `yup` is not) for **each one** — `.required()`, `.min()`, `.max()`, `.matches()`, `.oneOf()` for cross-field, `.test()` for custom/async. Preserve **all custom error messages exactly**. Display validation errors inline next to each field using `formState.errors`, matching the same UX as the source MVC app (show on blur / on submit, same positioning). If the source uses `@Html.ValidationSummary()`, create an equivalent form-level error summary component.
 7. For Kendo MVC controls — reference the **Phase 4 Kendo React mapping table** for the equivalent React component (only if Kendo migration was confirmed in Project Paths step 4)
-8. Use other third-party controls **only if already installed** in destination (MUI, Ant Design, etc.)
-9. Migrate CSS/styles into destination's styling approach (CSS Modules, styled-components, Tailwind, global styles)
+8. Use other third-party controls **only if already installed** in destination (MUI, Ant Design, etc.) — do not install new UI libraries
+9. Migrate CSS/styles — use destination's existing styling approach. Check in order: CSS Modules (if `.module.css` files exist) → Tailwind (if `tailwind.config` exists) → styled-components (if installed) → plain CSS files
 
 ---
 
-### Static Assets
+### Static Assets & CSS Migration
 
-Move `wwwroot/css/` → destination's styles location, `wwwroot/images/` → destination's assets location. Remove jQuery. Use destination's existing asset pipeline.
+> **STRICT REQUIREMENT:** Migrate the **entire CSS** from the source MVC project. Every stylesheet in `wwwroot/css/`, `Views/Shared/`, bundled CSS, and inline `<style>` blocks in Razor views must be accounted for. The destination frontend must reproduce the **same visual design, layout, spacing, colors, typography, and responsive behavior** as the source application. Do not discard, simplify, or "modernize" styles — preserve full visual fidelity.
+
+**CSS Migration Steps:**
+
+1. **Inventory all CSS sources** — Collect every CSS file from `wwwroot/css/`, `wwwroot/lib/`, `bundleconfig.json` / `_BundleConfig.cs`, `<link>` references in `_Layout.cshtml`, inline `<style>` blocks in Razor views, and any SCSS/LESS source files.
+2. **Map CSS to destination structure** — Move all stylesheets into the destination project's styling location. Maintain the same file organization (e.g., if source has `site.css`, `custom.css`, `page-specific.css`, create equivalent files or sections in the destination).
+3. **Preserve all class names and selectors** — Keep the same CSS class names used in the source so that migrated HTML/components render identically. Do not rename classes unless the destination project enforces scoped styles (CSS Modules, Angular `ViewEncapsulation`), in which case map every class explicitly.
+4. **Migrate page-specific and component-specific styles** — Any CSS scoped to a specific Razor view or partial must be co-located with the equivalent frontend component (Angular component styles / React CSS Module or styled-component).
+5. **Migrate media queries and responsive breakpoints** — Preserve all `@media` rules exactly as defined in the source. Do not replace with a different breakpoint system unless the user explicitly requests it.
+6. **Migrate CSS variables and theming** — If the source uses CSS custom properties (`--var`), SCSS/LESS variables, or Kendo theme variables, replicate them in the destination's theming setup.
+7. **Migrate vendor/third-party CSS** — If the source includes Bootstrap, Kendo CSS theme, Font Awesome, or other library stylesheets, ensure the same versions or equivalent styles are included in the destination project.
+8. **Remove jQuery and JS-only assets** — Remove jQuery, jQuery plugins, and other JS files that are replaced by framework equivalents. Do **not** remove any CSS that was loaded alongside those libraries.
+9. **Visual verification** — After migration, every page/component should visually match the source MVC application. Flag any CSS that could not be migrated 1:1 and note the deviation.
+
+Move `wwwroot/images/` → destination's assets location. Use destination's existing asset pipeline for images and static files.
 
 ---
 
@@ -370,6 +669,7 @@ Apply this phase only if Kendo migration was confirmed and packages were set up 
 | `Html.Kendo().Upload()` | `<kendo-upload>` |
 | `Html.Kendo().Window()` | `<kendo-dialog>` / `DialogService` |
 | `Html.Kendo().TabStrip()` | `<kendo-tabstrip>` |
+| `Html.Kendo().ExpansionPanel()` | `<kendo-expansionpanel>` from `@progress/kendo-angular-layout` |
 | `Html.Kendo().TreeView()` | `<kendo-treeview>` |
 | `Html.Kendo().Editor()` | `<kendo-editor>` |
 
@@ -391,6 +691,7 @@ Apply this phase only if Kendo migration was confirmed and packages were set up 
 | `Html.Kendo().Upload()` | `<Upload>` from `@progress/kendo-react-upload` |
 | `Html.Kendo().Window()` | `<Dialog>` from `@progress/kendo-react-dialogs` |
 | `Html.Kendo().TabStrip()` | `<TabStrip>` from `@progress/kendo-react-layout` |
+| `Html.Kendo().ExpansionPanel()` | `<ExpansionPanel>` from `@progress/kendo-react-layout` |
 | `Html.Kendo().TreeView()` | `<TreeView>` from `@progress/kendo-react-treeview` |
 | `Html.Kendo().Editor()` | `<Editor>` from `@progress/kendo-react-editor` |
 
@@ -403,18 +704,28 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 > **Complete the one-time setup below once before starting any controller migration. Then use the per-controller checklist for each controller.**
 
 **One-Time Setup — [ANGULAR ONLY]:**
-- [ ] `environment.ts` / `environment.development.ts` API base URL set
+- [ ] `environment.ts` / `environment.development.ts` / `environment.staging.ts` / `environment.prod.ts` API base URLs set for all environments
 - [ ] Auth pages (login/register) migrated, JWT storage in place
 - [ ] `HttpInterceptor` attaching `Authorization: Bearer` header
+- [ ] `HttpInterceptor` handling `400` ProblemDetails — maps server validation errors to form controls via `setErrors()`
+- [ ] `HttpInterceptor` handling `401`, `403`, `5xx` — redirect to error pages or display notification
 - [ ] `CanActivateFn` route guard for protected routes
+- [ ] Custom error page components (404, 500, AccessDenied) with wildcard route
 - [ ] SignalR Angular service created using `@microsoft/signalr` (if applicable)
+- [ ] Localization setup — `@ngx-translate/core` or `@angular/localize` with translation JSON files (if source uses i18n)
+- [ ] MVC Areas mapped to lazy-loaded feature modules / standalone route groups (if applicable)
 
 **One-Time Setup — [REACT ONLY]:**
-- [ ] `.env` / `.env.development` API base URL set (`VITE_API_URL` / `REACT_APP_API_URL`)
+- [ ] `.env.local` / `.env.development` / `.env.staging` / `.env.production` API base URLs set for all environments
 - [ ] Auth pages (login/register) migrated, JWT storage in place
 - [ ] Axios interceptor (or equivalent) attaching `Authorization: Bearer` header
+- [ ] Axios interceptor handling `400` ProblemDetails — maps server validation errors to form fields via `setError()`
+- [ ] Axios interceptor handling `401`, `403`, `5xx` — redirect to error pages or display notification
 - [ ] Protected route component for guarded routes
+- [ ] Custom error page components (404, 500, AccessDenied) with catch-all route
 - [ ] SignalR React hook created using `@microsoft/signalr` (if applicable)
+- [ ] Localization setup — `react-i18next` or `react-intl` with translation JSON files (if source uses i18n)
+- [ ] MVC Areas mapped to nested route groups (if applicable)
 
 ---
 
@@ -422,21 +733,28 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] API Controller (follow destination conventions)
 - [ ] Services + Interfaces (follow destination service layer)
 - [ ] DTOs + AutoMapper profile (follow destination DTO patterns)
-- [ ] All server-side validations migrated (data annotations, FluentValidation, custom attributes)
+- [ ] All server-side validations migrated (data annotations, FluentValidation, custom attributes) — return `ValidationProblemDetails` on failure
 - [ ] Custom middleware/filters migrated
 - [ ] DbContext, entities, configurations, seed data migrated
 - [ ] EF Core interceptors, query filters migrated
 - [ ] Migrations regenerated, connection strings updated
 - [ ] Register services + DbContext in DI
+- [ ] File upload endpoints migrated (`IFormFile` / `[FromForm]`) with validation (if applicable)
+- [ ] Localized validation messages and resource strings migrated (if applicable)
 - [ ] SignalR hub verified in Web API + CORS credentials allowed (if applicable)
 - [ ] Background jobs migrated and registered (if applicable)
+- [ ] `appsettings.*.json` updated for all environments (dev, staging, prod)
 
 **Per-Controller — Frontend [ANGULAR ONLY]:**
 - [ ] TypeScript models/interfaces
 - [ ] Angular Service with `HttpClient` (follow destination service pattern)
 - [ ] List, Detail, Create/Edit components (follow destination component pattern)
 - [ ] Feature routing — lazy-loaded modules or standalone routes
-- [ ] Reactive Form validation — `ValidatorFn` / `AsyncValidatorFn`
+- [ ] **ALL client-side validations migrated** — every `data-val-*` rule, custom JS validator → Reactive Forms `ValidatorFn` / `AsyncValidatorFn` with exact error messages preserved
+- [ ] Validation error display matches source UX (inline errors, validation summary if applicable)
+- [ ] **API ProblemDetails errors displayed inline** — server-side 400 validation errors mapped to form controls via `setErrors()`
+- [ ] File upload component migrated (if applicable)
+- [ ] Localized UI strings migrated to translation files (if applicable)
 - [ ] Kendo Angular controls replaced using Phase 4 reference table (if confirmed in Project Paths step 4)
 - [ ] Migrate CSS/SCSS styles
 - [ ] E2E test full flow
@@ -446,13 +764,23 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] API service / custom hook (axios, React Query, etc. — follow destination pattern)
 - [ ] Page and child components (list, detail, create/edit form)
 - [ ] Feature routing — `react-router-dom` routes (follow destination routing pattern)
-- [ ] Form validation — `react-hook-form` + `yup`/`zod` (follow destination pattern)
+- [ ] **ALL client-side validations migrated** — every `data-val-*` rule, custom JS validator → `yup` schema rules (or `zod` if already installed) with exact error messages preserved
+- [ ] Validation error display matches source UX (inline errors, validation summary if applicable)
+- [ ] **API ProblemDetails errors displayed inline** — server-side 400 validation errors mapped to form fields via `setError()`
+- [ ] File upload component migrated (if applicable)
+- [ ] Localized UI strings migrated to translation files (if applicable)
 - [ ] Kendo React controls replaced using Phase 4 reference table (if confirmed in Project Paths step 4)
 - [ ] SignalR React hook wired into component (if applicable)
-- [ ] Migrate CSS/styles (CSS Modules, Tailwind, styled-components)
+- [ ] Migrate CSS/styles — use destination's existing styling approach (check in order: CSS Modules → Tailwind → styled-components → plain CSS)
 - [ ] E2E test full flow
 
-**Order:** Core/Auth first → Simplest CRUD feature → Remaining features → Complex features (SignalR, file uploads)
+**Order:** Core/Auth first → then remaining controllers in **alphabetical order** → Complex features last (SignalR, file uploads). Within each controller: Index/List → Details → Create → Edit → Delete → remaining views alphabetically.
+
+**After ALL controllers are fully migrated (backend + frontend):**
+- Mark Phase 2, Phase 3, and Phase 5 as `[x] COMPLETED` in `MIGRATION_PROGRESS.md`
+- Update "Last Updated" timestamp
+- Print final summary: total controllers migrated, total files created, any skipped items
+- **Do NOT delete `MIGRATION_PROGRESS.md`** — keep it as a migration audit trail. The user may delete it manually when satisfied.
 
 ---
 
@@ -486,11 +814,11 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 | `[ValidateAntiForgeryToken]` | `HttpInterceptor` (JWT bearer header) |
 | `ModelState` | Angular Reactive Forms + `ValidatorFn` |
 | `RedirectToAction` | `router.navigate()` |
-| `TempData` / `ViewBag` | Services / `ngx-toastr` |
+| `TempData` / `ViewBag` | `ngx-toastr` for notifications, Angular services for shared state |
 | Partial Views | Child components (`@Input`/`@Output`) |
 | `_Layout.cshtml` | App shell + shared layout components |
-| jQuery / vanilla JS | RxJS, directives, pipes |
-| Session state | JWT claims / NgRx / service state |
+| jQuery / vanilla JS | RxJS, Angular directives, Angular pipes |
+| Session state | JWT claims in `HttpInterceptor`, or NgRx if already installed in destination |
 
 **Frontend — [REACT ONLY]:**
 
@@ -500,10 +828,10 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 | ViewModels | TS Interfaces |
 | `@Html` helpers | React components / utility functions |
 | `[ValidateAntiForgeryToken]` | Axios interceptor (JWT bearer header) |
-| `ModelState` | `react-hook-form` + `yup`/`zod` |
+| `ModelState` | `react-hook-form` + `yup` (default; `zod` only if already installed) |
 | `RedirectToAction` | `useNavigate()` from `react-router-dom` |
-| `TempData` / `ViewBag` | `react-toastify` / context / state |
+| `TempData` / `ViewBag` | `react-toastify` for notifications, React Context for shared state |
 | Partial Views | Child components (props) |
 | `_Layout.cshtml` | Root layout component |
 | jQuery / vanilla JS | Custom hooks, utility functions |
-| Session state | JWT claims / Zustand / Redux / Context |
+| Session state | JWT claims in axios interceptor, or Zustand/Redux if already installed in destination |
