@@ -36,7 +36,7 @@ All generated file and symbol names must follow these exact rules — no creativ
 > - Page component: `{SourceViewName}Page.tsx` (PascalCase) — e.g., `StudentListPage.tsx`, `StudentDetailPage.tsx`
 > - Component: `{SourceViewName}.tsx` — e.g., `StudentForm.tsx`
 > - Hook: `use{Feature}.ts` — e.g., `useStudents.ts`
-> - Service: `{feature}Service.ts` or `{feature}Api.ts` — e.g., `studentService.ts`
+> - Service: `{feature}Service.ts` (default). Use `{feature}Api.ts` only if the destination project already uses the `*Api.ts` naming pattern.
 > - Model/Interface: `{dto-name}.types.ts` — e.g., `student.types.ts`
 > - Folder structure: `src/pages/{feature-name}/` for pages, `src/components/{feature-name}/` for shared components — one folder per MVC controller
 
@@ -100,11 +100,20 @@ At the start of every migration (or resume), create and maintain a progress trac
 
 ## Controller Migration Status
 <!-- One row per controller, alphabetical order. Update status after EACH controller completes. -->
-| Controller | Backend API | Backend Services/DTOs | Backend Validations | Frontend Components | Frontend Validations | Frontend CSS | Status |
-|---|---|---|---|---|---|---|---|
-| AccountController | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | NOT STARTED |
-| DashboardController | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | NOT STARTED |
-| ... | | | | | | | |
+<!-- Column mapping to Phase 5 per-controller checklist:
+  Backend API = API Controller + custom middleware/filters
+  Backend Data = Entities, EF configs, seed data, interceptors, query filters for this controller's domain (DbContext registration is one-time setup)
+  Backend Services = Services + Interfaces + DTOs + AutoMapper profile + DI registration + appsettings
+  Backend Validations = All server-side validations + localized messages
+  Frontend Components = TS interfaces/models + service/hook + page components + routing
+  Frontend Validations = Client-side validations + ProblemDetails inline display
+  Frontend Features = File upload, SignalR, localization, Kendo controls, CSS (if applicable)
+-->
+| Controller | Backend API | Backend Data | Backend Services | Backend Validations | Frontend Components | Frontend Validations | Frontend Features | Status |
+|---|---|---|---|---|---|---|---|---|
+| AccountController | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | NOT STARTED |
+| DashboardController | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | NOT STARTED |
+| ... | | | | | | | | |
 
 ## Current Position
 - **Currently working on:** [Phase X, ControllerName, Step Y]
@@ -126,6 +135,8 @@ At the start of every migration (or resume), create and maintain a progress trac
 3. **Mark checkboxes as `[x]`** in the tracker as each item completes. Never uncheck a completed item.
 
 ### How to Resume After a Break
+
+> **USER INSTRUCTION:** If the migration was interrupted by a session timeout, paste this entire `migration.md` prompt into the new session and add the line: **"Resume the migration — check MIGRATION_PROGRESS.md for the checkpoint."** The AI will then follow the resume protocol below.
 
 When a session starts (or is restarted after a timeout/break), **before doing anything else**, follow these steps:
 
@@ -259,7 +270,7 @@ Migrate monolithic MVC app into: **[SELECTED_FRAMEWORK]** (existing project, UI)
 
 > **Before starting:** Verify the following are already configured in the destination projects. If any are missing, resolve them before generating migration code:
 > - **Web API:** JWT Bearer auth middleware, CORS policy that allows the frontend origin, Swagger/OpenAPI (optional but recommended)
-> - **Frontend:** HTTP client setup (Angular `HttpClientModule` / React `axios` or `fetch`), environment/config file with API base URL placeholder
+> - **Frontend:** HTTP client setup — Angular: `HttpClientModule` (or `provideHttpClient()` for standalone); React: `axios` if installed, otherwise native `fetch`
 > - **Auth interceptor:** Will be created during Phase 3 Auth UI migration if not already present in the destination project
 
 ### Pre-Migration: Analyze Destination Projects First
@@ -345,11 +356,12 @@ Before generating any code, **analyze both destination projects** to understand:
 
 ## Phase 1: Analyze Source MVC App
 
-Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layouts, partials, tag helpers), View Models, EF Core entities/DbContext, Services, Static assets, Third-party libs (Kendo etc.), Middleware/Filters, Custom Validations, AutoMapper profiles, SignalR hubs, Background jobs.
+Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layouts, partials, ViewComponents, tag helpers), View Models, EF Core entities/DbContext, Services, Static assets, Third-party libs (Kendo etc.), Middleware/Filters, Custom Validations, AutoMapper profiles, SignalR hubs, Background jobs.
 
 **Before proceeding to Phase 2, produce an inventory summary** listing:
 - All controllers and their action count
 - All Razor views grouped by controller
+- All ViewComponents (classes inheriting `ViewComponent` / `IViewComponentResult`) and where they are invoked
 - All EF Core entities and DbContext classes
 - All third-party libraries detected
 - All client-side validations — list every form with its `data-val-*` rules, custom `$.validator.addMethod()` validators, `data-val-remote` endpoints, and inline JS validation logic
@@ -475,7 +487,7 @@ Verify the Web API's CORS policy explicitly allows the frontend project's origin
 
 > **[ANGULAR ONLY]** — Create an Angular upload component using Kendo Upload (`<kendo-upload>`) if Kendo is installed, or a custom file input with `HttpClient` `FormData` upload. Show progress indicators if the source MVC app had them.
 
-> **[REACT ONLY]** — Create a React upload component using Kendo Upload (`<Upload>`) if Kendo is installed, or a custom `<input type="file">` with `axios`/`fetch` `FormData` upload. Show progress indicators if the source MVC app had them.
+> **[REACT ONLY]** — Create a React upload component using Kendo Upload (`<Upload>`) if Kendo is installed, or a custom `<input type="file">` with `axios` `FormData` upload (if axios is not installed, use native `fetch`). Show progress indicators if the source MVC app had them.
 
 ### MVC Areas Migration (if inventoried in Phase 1)
 
@@ -517,9 +529,9 @@ Verify the Web API's CORS policy explicitly allows the frontend project's origin
   - Extract all localized strings into structured JSON files or the destination's i18n format
   - Migrate server-side localized validation messages to API DTOs (use `WithMessage()` with localized strings or `IStringLocalizer` in FluentValidation)
 
-> **[ANGULAR ONLY]** — Use `@ngx-translate/core` or Angular's built-in `$localize` / `@angular/localize` (match what's installed). Create translation JSON files per locale. Replace all hardcoded UI strings with translation keys.
+> **[ANGULAR ONLY]** — Priority: (1) `@ngx-translate/core` if already installed, (2) Angular built-in `@angular/localize` / `$localize` if project uses it, (3) default to `@ngx-translate/core`. Create translation JSON files per locale. Replace all hardcoded UI strings with translation keys.
 
-> **[REACT ONLY]** — Use `react-i18next` or `react-intl` (match what's installed). Create translation JSON files per locale. Replace all hardcoded UI strings with translation hooks (`t('key')` / `useTranslation()`).
+> **[REACT ONLY]** — Priority: (1) `react-i18next` if already installed, (2) `react-intl` if already installed, (3) default to `react-i18next`. Create translation JSON files per locale. Replace all hardcoded UI strings with translation hooks (`t('key')` / `useTranslation()`).
 
 - If the source has no localization, skip this section entirely.
 
@@ -667,7 +679,7 @@ Apply this phase only if Kendo migration was confirmed and packages were set up 
 | `Html.Kendo().NumericTextBox()` | `<kendo-numerictextbox>` |
 | `Html.Kendo().Chart()` | `<kendo-chart>` |
 | `Html.Kendo().Upload()` | `<kendo-upload>` |
-| `Html.Kendo().Window()` | `<kendo-dialog>` / `DialogService` |
+| `Html.Kendo().Window()` | `<kendo-dialog>` (default). Use `DialogService` only if the destination project already uses programmatic dialog opening. |
 | `Html.Kendo().TabStrip()` | `<kendo-tabstrip>` |
 | `Html.Kendo().ExpansionPanel()` | `<kendo-expansionpanel>` from `@progress/kendo-angular-layout` |
 | `Html.Kendo().TreeView()` | `<kendo-treeview>` |
@@ -712,7 +724,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] `CanActivateFn` route guard for protected routes
 - [ ] Custom error page components (404, 500, AccessDenied) with wildcard route
 - [ ] SignalR Angular service created using `@microsoft/signalr` (if applicable)
-- [ ] Localization setup — `@ngx-translate/core` or `@angular/localize` with translation JSON files (if source uses i18n)
+- [ ] Localization setup — `@ngx-translate/core` (default) or `@angular/localize` (if project uses it) with translation JSON files (if source uses i18n)
 - [ ] MVC Areas mapped to lazy-loaded feature modules / standalone route groups (if applicable)
 
 **One-Time Setup — [REACT ONLY]:**
@@ -724,7 +736,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] Protected route component for guarded routes
 - [ ] Custom error page components (404, 500, AccessDenied) with catch-all route
 - [ ] SignalR React hook created using `@microsoft/signalr` (if applicable)
-- [ ] Localization setup — `react-i18next` or `react-intl` with translation JSON files (if source uses i18n)
+- [ ] Localization setup — `react-i18next` (default) or `react-intl` (only if already installed and react-i18next is not) with translation JSON files (if source uses i18n)
 - [ ] MVC Areas mapped to nested route groups (if applicable)
 
 ---
@@ -735,7 +747,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] DTOs + AutoMapper profile (follow destination DTO patterns)
 - [ ] All server-side validations migrated (data annotations, FluentValidation, custom attributes) — return `ValidationProblemDetails` on failure
 - [ ] Custom middleware/filters migrated
-- [ ] DbContext, entities, configurations, seed data migrated
+- [ ] Entity models, EF configurations, seed data for this controller's domain entities migrated into destination data layer (DbContext class itself is a one-time setup — see Phase 2 "DbContext & EF Core Migration")
 - [ ] EF Core interceptors, query filters migrated
 - [ ] Migrations regenerated, connection strings updated
 - [ ] Register services + DbContext in DI
@@ -816,6 +828,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 | `RedirectToAction` | `router.navigate()` |
 | `TempData` / `ViewBag` | `ngx-toastr` for notifications, Angular services for shared state |
 | Partial Views | Child components (`@Input`/`@Output`) |
+| ViewComponents | Standalone Angular components (self-contained, with own data fetching via service) |
 | `_Layout.cshtml` | App shell + shared layout components |
 | jQuery / vanilla JS | RxJS, Angular directives, Angular pipes |
 | Session state | JWT claims in `HttpInterceptor`, or NgRx if already installed in destination |
@@ -832,6 +845,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 | `RedirectToAction` | `useNavigate()` from `react-router-dom` |
 | `TempData` / `ViewBag` | `react-toastify` for notifications, React Context for shared state |
 | Partial Views | Child components (props) |
+| ViewComponents | Standalone React components (self-contained, with own data fetching via custom hook) |
 | `_Layout.cshtml` | Root layout component |
 | jQuery / vanilla JS | Custom hooks, utility functions |
 | Session state | JWT claims in axios interceptor, or Zustand/Redux if already installed in destination |
