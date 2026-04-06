@@ -15,7 +15,7 @@ When this document offers multiple alternatives (separated by `/`, `or`, or list
 ### Processing Order
 
 - **Phase execution:** Always execute Phase 1 → Phase 2 → Phase 3 → Phase 5 in strict order. Phase 4 is a reference table consulted during Phase 3 only.
-- **Controller processing order:** Process controllers in **alphabetical order by controller name** (e.g., `AccountController` before `DashboardController` before `OrderController`). Within each controller, process actions in the order they appear in the source file, top to bottom.
+- **Controller processing order:** Process controllers in this order: **Auth/Account controllers first** (login, register, account management — needed before other features), then remaining controllers in **alphabetical order by controller name** (e.g., `DashboardController` before `OrderController`), then complex feature controllers last (SignalR-heavy, file-upload-heavy). Within each controller, process actions in the order they appear in the source file, top to bottom.
 - **View processing order:** For each controller, process views in this fixed order: Index/List → Details → Create → Edit → Delete → any remaining views alphabetically.
 - **Service/DTO creation order:** Create services and DTOs in the same order as their associated controllers are processed.
 
@@ -96,6 +96,7 @@ At the start of every migration (or resume), create and maintain a progress trac
 - [ ] Error pages created
 - [ ] SignalR service/hook created (if applicable)
 - [ ] Localization setup (if applicable)
+- [ ] Bing Maps one-time setup done (if applicable)
 - [ ] CSS/assets base migration done
 
 ## Controller Migration Status
@@ -356,7 +357,7 @@ Before generating any code, **analyze both destination projects** to understand:
 
 ## Phase 1: Analyze Source MVC App
 
-Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layouts, partials, ViewComponents, tag helpers), View Models, EF Core entities/DbContext, Services, Static assets, Third-party libs (Kendo etc.), Middleware/Filters, Custom Validations, AutoMapper profiles, SignalR hubs, Background jobs.
+Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layouts, partials, ViewComponents, tag helpers), View Models, EF Core entities/DbContext, Services, Static assets, Third-party libs (Kendo, Bing Maps, etc.), Middleware/Filters, Custom Validations, AutoMapper profiles, SignalR hubs, Background jobs.
 
 **Before proceeding to Phase 2, produce an inventory summary** listing:
 - All controllers and their action count
@@ -374,6 +375,9 @@ Inventory all: Controllers (actions, routes, `[Authorize]`), Razor Views (layout
 - All file upload endpoints (`IFormFile` parameters, multipart form handling)
 - All custom error pages (404, 500, AccessDenied, etc.)
 - Localization/i18n usage — `.resx` resource files, `IStringLocalizer`, `IHtmlLocalizer`, `data-val-*` localized messages (if any)
+- `_ViewImports.cshtml` — list all `@using`, `@addTagHelper`, and `@inject` directives (these define global tag helper registrations and namespace imports that affect every view)
+- `_ViewStart.cshtml` — note the default layout assignment and any startup logic
+- All JavaScript bundles from `bundleconfig.json` / `_BundleConfig.cs` — list each bundle's input files and what they do (jQuery plugins, page-specific scripts, custom validators, etc.)
 
 Present this summary to the user and wait for confirmation before beginning Phase 2.
 
@@ -394,6 +398,7 @@ Present this summary to the user and wait for confirmation before beginning Phas
 | Select2 | 1. `@progress/kendo-angular-dropdowns` (if Kendo confirmed) → 2. Angular Material Autocomplete |
 | Chart.js/Highcharts | 1. `@progress/kendo-angular-charts` (if Kendo confirmed) → 2. `ngx-charts` |
 | Toastr / SweetAlert | 1. `ngx-toastr` → 2. `sweetalert2` |
+| Bing Maps | **STRICT — must use Bing Maps V8 SDK directly.** Install `bingmaps` types (`npm install bingmaps`). Load the Bing Maps script (`https://www.bing.com/api/maps/mapcontrol`) in `index.html` or dynamically via a service. Read the API key from `environment.ts` (placeholder `bingMapsKey: ''` — user will add the actual key to `appsettings.json` post-migration). Use `Microsoft.Maps.Map` API in `AfterViewInit` with `ElementRef`. Do not substitute with Google Maps, Leaflet, or any other map provider. |
 
 ---
 
@@ -410,6 +415,7 @@ Present this summary to the user and wait for confirmation before beginning Phas
 | Select2 | 1. `react-select` → 2. `@progress/kendo-react-dropdowns` (if Kendo confirmed) |
 | Chart.js/Highcharts | 1. `@progress/kendo-react-charts` (if Kendo confirmed) → 2. `recharts` → 3. `@nivo/core` |
 | Toastr / SweetAlert | 1. `react-toastify` → 2. `sweetalert2` |
+| Bing Maps | **STRICT — must use Bing Maps V8 SDK directly.** Install `bingmaps` types (`npm install bingmaps`). Load the Bing Maps script (`https://www.bing.com/api/maps/mapcontrol`) dynamically in a `useEffect` hook. Read the API key from environment config (`VITE_BINGMAPS_KEY` or `REACT_APP_BINGMAPS_KEY` — user will add the actual key post-migration; use a placeholder during migration). Use `Microsoft.Maps.Map` on a `useRef<HTMLDivElement>` container. Do not substitute with Google Maps, Leaflet, or any other map provider. |
 
 ---
 
@@ -461,6 +467,22 @@ Verify JWT Bearer, Role/Policy `[Authorize]` attributes, and claims mapping matc
 ### CORS Verification
 
 Verify the Web API's CORS policy explicitly allows the frontend project's origin (development and production URLs). If not configured, add a CORS policy in `Program.cs` before migration proceeds — all API calls from the frontend will fail without it.
+
+### Middleware Pipeline Ordering
+
+When migrating custom middleware into the destination Web API's `Program.cs` (or `Startup.cs`), ensure the middleware is registered in the correct order. The standard ASP.NET Core pipeline order is:
+
+1. `UseExceptionHandler` / global error handling middleware
+2. `UseHsts` / `UseHttpsRedirection`
+3. `UseStaticFiles` (if serving static files from Web API)
+4. `UseRouting`
+5. `UseCors` (**must** come after `UseRouting` and before `UseAuthentication`)
+6. `UseAuthentication`
+7. `UseAuthorization`
+8. Custom middleware (logging, tenant resolution, rate limiting, etc.) — place after auth unless the middleware explicitly needs to run before authentication
+9. `MapControllers` / `MapHub<T>` / endpoint mapping
+
+If the destination project already has a configured pipeline, insert migrated middleware at the appropriate position — do not reorder existing middleware.
 
 ### SignalR Migration (if inventoried in Phase 1)
 
@@ -588,8 +610,36 @@ If the source MVC app has login, register, or account management pages, migrate 
 | `@if / @foreach` | Use destination's Angular version syntax: Angular 17+ → `@if`/`@for`; Angular <17 → `*ngIf`/`*ngFor`. Check `package.json` for Angular version. |
 | `ViewBag.Title` | Angular `Title` service (`import { Title } from '@angular/platform-browser'`) |
 | `TempData["Msg"]` | `ngx-toastr` notification service (default). Use `sweetalert2` only if already installed and `ngx-toastr` is not. |
+| `@Html.DisplayFor` | `{{ model.property }}` interpolation (read-only display) |
+| `@Html.DisplayNameFor` | Label text — use `<label>` with model metadata or hardcoded label matching source |
+| `@Html.EditorFor` | `<input formControlName>` (same as `TextBoxFor` unless source renders a custom editor template — replicate that template as a child component) |
+| `@Html.HiddenFor` | `<input type="hidden" formControlName>` |
+| `@Html.RadioButtonFor` | `<input type="radio" formControlName>` |
+| `@Html.CheckBoxFor` | `<input type="checkbox" formControlName>` (Kendo `<kendo-checkbox>` if Kendo installed) |
+| `@Html.TextAreaFor` | `<textarea formControlName>` (Kendo `<kendo-textarea>` if Kendo installed) |
+| `@Html.LabelFor` | `<label for="controlId">` with text matching source label |
+| `@Html.PasswordFor` | `<input type="password" formControlName>` |
+| `@Html.ListBoxFor` | `<select multiple formControlName>` (Kendo `<kendo-multiselect>` if Kendo installed) |
+| `@Html.Raw(...)` | `[innerHTML]="sanitizedHtml"` — sanitize via `DomSanitizer.bypassSecurityTrustHtml()` only if source content is trusted |
+| `@Html.ValidationSummary()` | Form-level error summary component — collect all `FormGroup` errors and display as a list above the form (match source UX) |
+| `ViewData["key"]` | Component property or Angular service for shared state |
+| `@Url.Action("Action", "Controller")` | Build route path string using Angular Router — e.g., `'/controller/action'` or `router.createUrlTree()` |
+| `@Url.Content("~/path")` | Asset path — use `assets/path` relative to `src/assets/` |
 | `@Html.AntiForgeryToken()` | Not needed (JWT) |
+| **ASP.NET Core Tag Helpers** | **Angular equivalents (same as `@Html.*` counterparts above):** |
+| `<input asp-for="Name">` | `<input formControlName="name">` (same rules as `@Html.TextBoxFor`) |
+| `<textarea asp-for="Bio">` | `<textarea formControlName="bio">` (same rules as `@Html.TextAreaFor`) |
+| `<label asp-for="Name">` | `<label for="controlId">` with text matching source label (same as `@Html.LabelFor`) |
+| `<select asp-for="Cat" asp-items="...">` | Kendo `<kendo-dropdownlist>` / `<mat-select>` / native `<select>` (same rules as `@Html.DropDownListFor`) |
+| `<span asp-validation-for="Name">` | Inline `<div *ngIf="control.errors">` (same rules as `@Html.ValidationMessageFor`) |
+| `<div asp-validation-summary="All">` | Form-level error summary component (same rules as `@Html.ValidationSummary()`) |
+| `<a asp-action="Edit" asp-controller="X" asp-route-id="@id">` | `<a [routerLink]="['/x/edit', id]">` (same rules as `@Html.ActionLink`) |
+| `<form asp-action="Create" asp-controller="X">` | `<form [formGroup] (ngSubmit)>` (same rules as `<form asp-action>`) |
+| `<img asp-append-version="true">` | `<img src="assets/path">` — Angular CLI hashes assets at build time; remove `asp-append-version` |
+| `<environment include="Development">` | Use `environment.ts` / `environment.prod.ts` to conditionally include dev-only scripts or config |
+| `<partial name="_X" />` | Child component with `@Input` (same rules as `@Html.Partial`) |
 | Kendo Tag Helpers | Kendo Angular components (if installed in destination) |
+| Bing Maps SDK / `Microsoft.Maps` | **STRICT — Direct Bing Maps V8 SDK** via `bingmaps` types package. Use `Microsoft.Maps.Map` in `AfterViewInit` + `ElementRef`. API key read from `environment.ts` (placeholder until user adds key to `appsettings.json` post-migration). Do not substitute with any other map provider. |
 
 ### [ANGULAR ONLY] — Per-View Steps
 
@@ -603,8 +653,22 @@ If the source MVC app has login, register, or account management pages, migrate 
 5. Add routing — follow destination's existing routing pattern (lazy-loaded modules or standalone routes)
 6. **Migrate ALL form validations (STRICT)** — For every form field in the Razor view, extract every `data-val-*` attribute, jQuery Unobtrusive rule, and custom JS validator. Create an equivalent Angular Reactive Forms validator for **each one** — `Validators.required`, `Validators.minLength`, `Validators.maxLength`, `Validators.min`, `Validators.max`, `Validators.pattern`, custom `ValidatorFn` for cross-field rules, custom `AsyncValidatorFn` for remote/async validations. Preserve **all custom error messages exactly**. Display validation errors inline next to each field, matching the same UX as the source MVC app (show on blur / on submit, same positioning). If the source uses `@Html.ValidationSummary()`, create an equivalent form-level error summary component.
 7. For Kendo MVC controls — reference the **Phase 4 Kendo Angular mapping table** for the equivalent Angular component (only if Kendo migration was confirmed in Project Paths step 4)
-8. Use other third-party controls **only if already installed** in destination (Material, etc.) — do not install new UI libraries
-9. Migrate CSS/styles — use destination's existing styling approach. Check in order: Angular component styles (`.scss`/`.css` co-located) → global `styles.scss` → CSS Modules if configured
+8. **Bing Maps migration (STRICT — Direct Bing Maps V8 SDK only)** — If the source view uses Bing Maps (look for `Microsoft.Maps.Map`, Bing Maps `<script>` tags, or `@Html.Raw` blocks initializing Bing Maps), **migrate as-is from source to destination using the Bing Maps V8 SDK directly.** Do not substitute with Google Maps, Leaflet, or any other map provider.
+   - **Install:** `npm install bingmaps` (TypeScript type definitions for Bing Maps V8). Add `/// <reference types="bingmaps" />` in a global `.d.ts` file or at the top of the component file.
+   - **Script loading:** Add the Bing Maps control script to `index.html` (`<script src="https://www.bing.com/api/maps/mapcontrol?callback=bingMapsReady"></script>`) or load it dynamically via an injectable `BingMapsLoaderService` that appends the script tag and resolves a Promise when the callback fires.
+   - **API key handling:** Add a placeholder entry `"BingMaps": { "ApiKey": "" }` in `appsettings.json` on the Web API side. In `environment.ts`, add `bingMapsKey: ''`. The user will fill in the actual Bing Maps API key post-migration. During migration, replicate the exact same map configuration from the source — just wire the key reference to `environment.bingMapsKey` (passed to the component via an `@Input` or injected config service).
+   - **Component implementation:** In the Angular component, use `AfterViewInit` + `@ViewChild` with an `ElementRef` container `<div>`. Initialize the map: `new Microsoft.Maps.Map(this.mapContainer.nativeElement, { credentials: this.apiKey, center: new Microsoft.Maps.Location(lat, lng), zoom: zoomLevel, mapTypeId: Microsoft.Maps.MapTypeId.road })`. Migrate **all** map features from source:
+     - **Pushpins:** `const pin = new Microsoft.Maps.Pushpin(new Microsoft.Maps.Location(lat, lng), { icon: iconUrl, title: title });` → `map.entities.push(pin);`
+     - **Infoboxes:** `const infobox = new Microsoft.Maps.Infobox(location, { title, description, visible: false });` → `infobox.setMap(map);` → show on pushpin click via `Microsoft.Maps.Events.addHandler(pin, 'click', () => infobox.setOptions({ visible: true }))`
+     - **Polylines:** `new Microsoft.Maps.Polyline([loc1, loc2, ...], { strokeColor, strokeThickness })` → `map.entities.push(polyline);`
+     - **Polygons:** `new Microsoft.Maps.Polygon([loc1, loc2, ...], { fillColor, strokeColor, strokeThickness })` → `map.entities.push(polygon);`
+     - **Event handlers:** `Microsoft.Maps.Events.addHandler(map, 'click', callback)` — replicate all source event handlers
+   - **Cleanup:** Implement `OnDestroy` to call `map.dispose()` and remove event handlers.
+   - Preserve **all** source Bing Maps functionality with exact feature parity — map type, zoom level, center coordinates, pushpin locations/icons, infobox content, polyline/polygon paths and styling, event handlers.
+9. Use other third-party controls **only if already installed** in destination (Material, etc.) — do not install new UI libraries
+10. **Migrate `@section Scripts { }` blocks** — If the Razor view has a `@section Scripts` block containing JavaScript (Kendo widget initialization, custom validation, page-specific logic), migrate all that logic into the Angular component's `ngOnInit` / `AfterViewInit` lifecycle hooks or directive logic. Do not discard page-specific JS.
+11. **Migrate ViewComponents** — If the Razor view invokes `@await Component.InvokeAsync("ComponentName")` or `<vc:component-name>`, create a standalone Angular component for each ViewComponent. The Angular component should fetch its own data via an injected service (matching the ViewComponent's `InvokeAsync` logic) and render the same UI.
+12. Migrate CSS/styles — use destination's existing styling approach. Check in order: Angular component styles (`.scss`/`.css` co-located) → global `styles.scss` → CSS Modules if configured
 
 ---
 
@@ -623,8 +687,36 @@ If the source MVC app has login, register, or account management pages, migrate 
 | `@if / @foreach` | `{condition && <JSX>}` / `{array.map(...)}` |
 | `ViewBag.Title` | `document.title` assignment in `useEffect`. Use `react-helmet-async` only if already installed. |
 | `TempData["Msg"]` | `react-toastify` (default). Use `sweetalert2` only if already installed and `react-toastify` is not. |
+| `@Html.DisplayFor` | `{model.property}` JSX expression (read-only display) |
+| `@Html.DisplayNameFor` | Label text — use `<label>` with hardcoded label matching source |
+| `@Html.EditorFor` | `<input {...register('field')}>` (same as `TextBoxFor` unless source renders a custom editor template — replicate that template as a child component) |
+| `@Html.HiddenFor` | `<input type="hidden" {...register('field')}>` |
+| `@Html.RadioButtonFor` | `<input type="radio" {...register('field')}>` |
+| `@Html.CheckBoxFor` | `<input type="checkbox" {...register('field')}>` (Kendo `<Checkbox>` if Kendo installed) |
+| `@Html.TextAreaFor` | `<textarea {...register('field')}>` (Kendo `<TextArea>` if Kendo installed) |
+| `@Html.LabelFor` | `<label htmlFor="fieldId">` with text matching source label |
+| `@Html.PasswordFor` | `<input type="password" {...register('field')}>` |
+| `@Html.ListBoxFor` | `<select multiple {...register('field')}>` (Kendo `<MultiSelect>` if Kendo installed) |
+| `@Html.Raw(...)` | `<div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />` — only if source content is trusted; prefer safe rendering |
+| `@Html.ValidationSummary()` | Form-level error summary component — collect all `formState.errors` and display as a list above the form (match source UX) |
+| `ViewData["key"]` | Component state, props, or React Context for shared state |
+| `@Url.Action("Action", "Controller")` | Build route path string — e.g., `'/controller/action'` or use `generatePath()` from `react-router-dom` |
+| `@Url.Content("~/path")` | Asset path — use `/path` relative to `public/` or `import` for bundled assets |
 | `@Html.AntiForgeryToken()` | Not needed (JWT) |
+| **ASP.NET Core Tag Helpers** | **React equivalents (same as `@Html.*` counterparts above):** |
+| `<input asp-for="Name">` | `<input {...register('name')}>` (same rules as `@Html.TextBoxFor`) |
+| `<textarea asp-for="Bio">` | `<textarea {...register('bio')}>` (same rules as `@Html.TextAreaFor`) |
+| `<label asp-for="Name">` | `<label htmlFor="fieldId">` with text matching source label (same as `@Html.LabelFor`) |
+| `<select asp-for="Cat" asp-items="...">` | Kendo `<DropDownList>` / `react-select` / native `<select>` (same rules as `@Html.DropDownListFor`) |
+| `<span asp-validation-for="Name">` | `{errors.fieldName && <span>{errors.fieldName.message}</span>}` (same rules as `@Html.ValidationMessageFor`) |
+| `<div asp-validation-summary="All">` | Form-level error summary component (same rules as `@Html.ValidationSummary()`) |
+| `<a asp-action="Edit" asp-controller="X" asp-route-id="@id">` | `<Link to={\`/x/edit/${id}\`}>` (same rules as `@Html.ActionLink`) |
+| `<form asp-action="Create" asp-controller="X">` | `<form onSubmit={handleSubmit(onSubmit)}>` (same rules as `<form asp-action>`) |
+| `<img asp-append-version="true">` | `<img src="/path">` — Vite/CRA hashes assets at build time; remove `asp-append-version` |
+| `<environment include="Development">` | Use `.env.development` / `.env.production` to conditionally include dev-only scripts or config |
+| `<partial name="_X" />` | Child component with props (same rules as `@Html.Partial`) |
 | Kendo Tag Helpers | Kendo React components (if installed in destination) |
+| Bing Maps SDK / `Microsoft.Maps` | **STRICT — Direct Bing Maps V8 SDK** via `bingmaps` types package. Use `Microsoft.Maps.Map` in `useEffect` + `useRef<HTMLDivElement>`. API key read from env config (placeholder until user adds key post-migration). Do not substitute with any other map provider. |
 
 ### [REACT ONLY] — Per-View Steps
 
@@ -638,8 +730,22 @@ If the source MVC app has login, register, or account management pages, migrate 
 5. Add routing — follow destination's existing routing pattern (`react-router-dom` v6 `<Route>`, nested routes, or file-based routing)
 6. **Migrate ALL form validations (STRICT)** — For every form field in the Razor view, extract every `data-val-*` attribute, jQuery Unobtrusive rule, and custom JS validator. Create an equivalent `yup` schema rule (default; use `zod` only if already installed and `yup` is not) for **each one** — `.required()`, `.min()`, `.max()`, `.matches()`, `.oneOf()` for cross-field, `.test()` for custom/async. Preserve **all custom error messages exactly**. Display validation errors inline next to each field using `formState.errors`, matching the same UX as the source MVC app (show on blur / on submit, same positioning). If the source uses `@Html.ValidationSummary()`, create an equivalent form-level error summary component.
 7. For Kendo MVC controls — reference the **Phase 4 Kendo React mapping table** for the equivalent React component (only if Kendo migration was confirmed in Project Paths step 4)
-8. Use other third-party controls **only if already installed** in destination (MUI, Ant Design, etc.) — do not install new UI libraries
-9. Migrate CSS/styles — use destination's existing styling approach. Check in order: CSS Modules (if `.module.css` files exist) → Tailwind (if `tailwind.config` exists) → styled-components (if installed) → plain CSS files
+8. **Bing Maps migration (STRICT — Direct Bing Maps V8 SDK only)** — If the source view uses Bing Maps (look for `Microsoft.Maps.Map`, Bing Maps `<script>` tags, or `@Html.Raw` blocks initializing Bing Maps), **migrate as-is from source to destination using the Bing Maps V8 SDK directly.** Do not substitute with Google Maps, Leaflet, or any other map provider.
+   - **Install:** `npm install bingmaps` (TypeScript type definitions for Bing Maps V8). Add `/// <reference types="bingmaps" />` in a global `.d.ts` file.
+   - **Script loading:** Load the Bing Maps control script dynamically in a custom hook (`useBingMapsLoader`) or a `useEffect` — append `<script src="https://www.bing.com/api/maps/mapcontrol?callback=bingMapsReady"></script>` to document head and resolve via the callback. Clean up the script tag in the `useEffect` cleanup.
+   - **API key handling:** Add a placeholder entry `VITE_BINGMAPS_KEY=` (Vite) or `REACT_APP_BINGMAPS_KEY=` (CRA) in `.env`. The user will fill in the actual Bing Maps API key post-migration. During migration, replicate the exact same map configuration from the source — just wire the key reference to `import.meta.env.VITE_BINGMAPS_KEY` (Vite) or `process.env.REACT_APP_BINGMAPS_KEY` (CRA), passed to the component via props or context.
+   - **Component implementation:** Create a reusable `BingMap` component. Use `useRef<HTMLDivElement>(null)` for the map container. In `useEffect` (after script loaded), initialize: `new Microsoft.Maps.Map(ref.current, { credentials: apiKey, center: new Microsoft.Maps.Location(lat, lng), zoom: zoomLevel, mapTypeId: Microsoft.Maps.MapTypeId.road })`. Migrate **all** map features from source:
+     - **Pushpins:** `const pin = new Microsoft.Maps.Pushpin(new Microsoft.Maps.Location(lat, lng), { icon: iconUrl, title });` → `map.entities.push(pin);`
+     - **Infoboxes:** `const infobox = new Microsoft.Maps.Infobox(location, { title, description, visible: false });` → `infobox.setMap(map);` → show on pushpin click via `Microsoft.Maps.Events.addHandler(pin, 'click', () => infobox.setOptions({ visible: true }))`
+     - **Polylines:** `new Microsoft.Maps.Polyline([loc1, loc2, ...], { strokeColor, strokeThickness })` → `map.entities.push(polyline);`
+     - **Polygons:** `new Microsoft.Maps.Polygon([loc1, loc2, ...], { fillColor, strokeColor, strokeThickness })` → `map.entities.push(polygon);`
+     - **Event handlers:** `Microsoft.Maps.Events.addHandler(map, 'click', callback)` — replicate all source event handlers
+   - **Cleanup:** In the `useEffect` cleanup function, call `map.dispose()` and remove event handlers to prevent memory leaks.
+   - Preserve **all** source Bing Maps functionality with exact feature parity — map type, zoom level, center coordinates, pushpin locations/icons, infobox content, polyline/polygon paths and styling, event handlers.
+9. Use other third-party controls **only if already installed** in destination (MUI, Ant Design, etc.) — do not install new UI libraries
+10. **Migrate `@section Scripts { }` blocks** — If the Razor view has a `@section Scripts` block containing JavaScript (Kendo widget initialization, custom validation, page-specific logic), migrate all that logic into the React component's `useEffect` hooks, event handlers, or custom hooks. Do not discard page-specific JS.
+11. **Migrate ViewComponents** — If the Razor view invokes `@await Component.InvokeAsync("ComponentName")` or `<vc:component-name>`, create a standalone React component for each ViewComponent. The React component should fetch its own data via a custom hook or `useEffect` (matching the ViewComponent's `InvokeAsync` logic) and render the same UI.
+12. Migrate CSS/styles — use destination's existing styling approach. Check in order: CSS Modules (if `.module.css` files exist) → Tailwind (if `tailwind.config` exists) → styled-components (if installed) → plain CSS files
 
 ---
 
@@ -657,7 +763,8 @@ If the source MVC app has login, register, or account management pages, migrate 
 6. **Migrate CSS variables and theming** — If the source uses CSS custom properties (`--var`), SCSS/LESS variables, or Kendo theme variables, replicate them in the destination's theming setup.
 7. **Migrate vendor/third-party CSS** — If the source includes Bootstrap, Kendo CSS theme, Font Awesome, or other library stylesheets, ensure the same versions or equivalent styles are included in the destination project.
 8. **Remove jQuery and JS-only assets** — Remove jQuery, jQuery plugins, and other JS files that are replaced by framework equivalents. Do **not** remove any CSS that was loaded alongside those libraries.
-9. **Visual verification** — After migration, every page/component should visually match the source MVC application. Flag any CSS that could not be migrated 1:1 and note the deviation.
+9. **Migrate JavaScript bundles** — For each JS bundle in `bundleconfig.json` / `_BundleConfig.cs`, identify the purpose of every input file. jQuery and jQuery plugin files are removed (replaced by framework equivalents). Custom JS files containing business logic, page initialization, or utility functions must be migrated into the appropriate component/hook/service in the destination frontend. Do not silently drop any JS file without confirming its logic is covered by the migrated components.
+10. **Visual verification** — After migration, every page/component should visually match the source MVC application. Flag any CSS that could not be migrated 1:1 and note the deviation.
 
 Move `wwwroot/images/` → destination's assets location. Use destination's existing asset pipeline for images and static files.
 
@@ -726,6 +833,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] SignalR Angular service created using `@microsoft/signalr` (if applicable)
 - [ ] Localization setup — `@ngx-translate/core` (default) or `@angular/localize` (if project uses it) with translation JSON files (if source uses i18n)
 - [ ] MVC Areas mapped to lazy-loaded feature modules / standalone route groups (if applicable)
+- [ ] Bing Maps one-time setup — `npm install bingmaps`, `/// <reference types="bingmaps" />` in global `.d.ts`, Bing Maps script loaded in `index.html` or via `BingMapsLoaderService`, `bingMapsKey: ''` placeholder in `environment.ts`, `"BingMaps": { "ApiKey": "" }` in `appsettings.json` (if source uses Bing Maps)
 
 **One-Time Setup — [REACT ONLY]:**
 - [ ] `.env.local` / `.env.development` / `.env.staging` / `.env.production` API base URLs set for all environments
@@ -738,6 +846,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] SignalR React hook created using `@microsoft/signalr` (if applicable)
 - [ ] Localization setup — `react-i18next` (default) or `react-intl` (only if already installed and react-i18next is not) with translation JSON files (if source uses i18n)
 - [ ] MVC Areas mapped to nested route groups (if applicable)
+- [ ] Bing Maps one-time setup — `npm install bingmaps`, `/// <reference types="bingmaps" />` in global `.d.ts`, Bing Maps loader hook/utility created, `VITE_BINGMAPS_KEY=` or `REACT_APP_BINGMAPS_KEY=` placeholder in `.env`, `"BingMaps": { "ApiKey": "" }` in `appsettings.json` (if source uses Bing Maps)
 
 ---
 
@@ -768,6 +877,8 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] File upload component migrated (if applicable)
 - [ ] Localized UI strings migrated to translation files (if applicable)
 - [ ] Kendo Angular controls replaced using Phase 4 reference table (if confirmed in Project Paths step 4)
+- [ ] Bing Maps component migrated using Direct Bing Maps V8 SDK — all pushpins, infoboxes, polylines, polygons, event handlers replicated with exact feature parity (if source view uses Bing Maps)
+- [ ] SignalR Angular service wired into component (if applicable)
 - [ ] Migrate CSS/SCSS styles
 - [ ] E2E test full flow
 
@@ -782,6 +893,7 @@ For server-side grid operations, use `[FromBody] DataSourceRequest` + `ToDataSou
 - [ ] File upload component migrated (if applicable)
 - [ ] Localized UI strings migrated to translation files (if applicable)
 - [ ] Kendo React controls replaced using Phase 4 reference table (if confirmed in Project Paths step 4)
+- [ ] Bing Maps component migrated using Direct Bing Maps V8 SDK — all pushpins, infoboxes, polylines, polygons, event handlers replicated with exact feature parity (if source view uses Bing Maps)
 - [ ] SignalR React hook wired into component (if applicable)
 - [ ] Migrate CSS/styles — use destination's existing styling approach (check in order: CSS Modules → Tailwind → styled-components → plain CSS)
 - [ ] E2E test full flow
